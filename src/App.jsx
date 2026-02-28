@@ -24,6 +24,15 @@ export default function App() {
 
   const [editandoId, setEditandoId] = useState(null);
 
+  function handleSelectedChange(e) {
+    const opcaoSelecionada = e.target.value;
+    setServico(opcaoSelecionada);
+
+    switch(opcaoSelecionada){
+      
+    }
+  }
+
   useEffect(() => {
     const dados = JSON.parse(localStorage.getItem("servicos")) || [];
     setLista(dados);
@@ -111,6 +120,10 @@ export default function App() {
     0
   );
 
+  // function handleChange(e){
+  //   setServico(e);
+  //   handleSelectedChange(e);
+  // }
   return (
     <div className="container">
       <h1>Controle de Serviços</h1>
@@ -153,7 +166,7 @@ export default function App() {
         />
 
         <button onClick={salvar}>
-          {editandoId ? "Atualizar Serviço" : "Salvar Serviço"}
+          {editandoId ? "Atualizar" : "Salvar"}
         </button>
       </div>
 

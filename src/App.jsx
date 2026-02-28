@@ -2,59 +2,34 @@ import { useEffect, useState } from "react";
 import "./App.css";
 
 export default function App() {
-  // Data de hoje
   const hoje = new Date().toISOString().split("T")[0];
 
-  // Mês atual
   const ano = new Date().getFullYear();
   const mes = String(new Date().getMonth() + 1).padStart(2, "0");
   const primeiroDiaDoMes = `${ano}-${mes}-01`;
 
-  // Estados do formulário
   const [servico, setServico] = useState("");
   const [nome, setNome] = useState("");
   const [valor, setValor] = useState("");
   const [obs, setObs] = useState("");
   const [data, setData] = useState(hoje);
 
-  // Estados da aplicação
   const [lista, setLista] = useState([]);
   const [mostrarLista, setMostrarLista] = useState(false);
 
-  // Subtotal
   const [inicio, setInicio] = useState("");
   const [fim, setFim] = useState("");
   const [subtotal, setSubtotal] = useState(0);
+  const [servicosPeriodo, setServicosPeriodo] = useState([]);
 
-  // 🔹 Carregar serviços ao iniciar
+  const [editandoId, setEditandoId] = useState(null);
+
   useEffect(() => {
     const dados = JSON.parse(localStorage.getItem("servicos")) || [];
     setLista(dados);
   }, []);
-  
 
-  // 🔹 Salvar serviço
-  const salvar = () => {
-    
-    if (!servico || !nome || !valor) {
-      alert("Preencha Serviço, Nome e Valor");
-      return;
-    }
-
-    const novoServico = {
-      id: Date.now(),
-      servico,
-      nome,
-      valor: Number(valor),
-      obs,
-      data,
-    };
-
-    const novaLista = [...lista, novoServico];
-    setLista(novaLista);
-    localStorage.setItem("servicos", JSON.stringify(novaLista));
-
-    // Limpar campos (mantendo data atual)
+  const limparFormulario = () => {
     setServico("");
     setNome("");
     setValor("");
@@ -62,47 +37,89 @@ export default function App() {
     setData(hoje);
   };
 
-  // 🔹 Calcular subtotal por período
-  const calcularSubtotal = () => {
-    const total = lista
-      .filter(
-        item =>
-          (!inicio || item.data >= inicio) &&
-          (!fim || item.data <= fim)
-      )
-      .reduce((soma, item) => soma + item.valor, 0);
+  const salvar = () => {
+    if (!servico || !nome || !valor) {
+      alert("Preencha Serviço, Nome e Valor");
+      return;
+    }
 
-    setSubtotal(total);
+    if (editandoId) {
+      const listaAtualizada = lista.map(item =>
+        item.id === editandoId
+          ? { ...item, servico, nome, valor: Number(valor), obs, data }
+          : item
+      );
+      setLista(listaAtualizada);
+      localStorage.setItem("servicos", JSON.stringify(listaAtualizada));
+      setEditandoId(null);
+    } else {
+      const novoServico = {
+        id: Date.now(),
+        servico,
+        nome,
+        valor: Number(valor),
+        obs,
+        data,
+      };
+      const novaLista = [...lista, novoServico];
+      setLista(novaLista);
+      localStorage.setItem("servicos", JSON.stringify(novaLista));
+    }
+
+    limparFormulario();
   };
 
-  // 🔹 Limpar todos os serviços
-  const limparTudo = () => {
-    const confirmar = window.confirm(
-      "Tem certeza que deseja apagar TODOS os serviços? Essa ação não pode ser desfeita."
-    );
+  const editarServico = (item) => {
+    setServico(item.servico);
+    setNome(item.nome);
+    setValor(item.valor);
+    setObs(item.obs || "");
+    setData(item.data);
+    setEditandoId(item.id);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
-    if (!confirmar) return;
-
+  const limparTodos = () => {
+    if (!window.confirm("Deseja apagar TODOS os serviços? Ação IRREVERSÍVEL!")) return;
     localStorage.removeItem("servicos");
     setLista([]);
     setSubtotal(0);
+    setServicosPeriodo([]);
+    setMostrarLista(false);
   };
 
-  // 🔹 Trabalhos somente do mês atual
+  const calcularSubtotal = () => {
+    const filtrados = lista.filter(
+      item =>
+        (!inicio || item.data >= inicio) &&
+        (!fim || item.data <= fim)
+    );
+
+    const total = filtrados.reduce((s, i) => s + i.valor, 0);
+    setSubtotal(total);
+    setServicosPeriodo(filtrados);
+  };
+
+  // 👉 Trabalhos do mês atual
   const trabalhosDoMes = lista.filter(
     item => item.data >= primeiroDiaDoMes && item.data <= hoje
+  );
+
+  // 👉 Subtotal do mês atual
+  const subtotalMes = trabalhosDoMes.reduce(
+    (soma, item) => soma + item.valor,
+    0
   );
 
   return (
     <div className="container">
       <h1>Controle de Serviços</h1>
 
-      {/* CADASTRO */}
       <div className="card">
-        <h2>Novo Serviço</h2>
+        <h2>{editandoId ? "Editar Serviço" : "Novo Serviço"}</h2>
 
         <select value={servico} onChange={e => setServico(e.target.value)}>
-          <option value="">Selecione o serviço</option>
+          <option value="" disabled>Selecione o serviço</option>
           <option>Banho</option>
           <option>Banho + Tosa Higiênica</option>
           <option>Banho + Tosa Completa</option>
@@ -135,65 +152,62 @@ export default function App() {
           onChange={e => setObs(e.target.value)}
         />
 
-        <button type="button" onClick={salvar}>
-          Salvar Serviço
+        <button onClick={salvar}>
+          {editandoId ? "Atualizar Serviço" : "Salvar Serviço"}
         </button>
       </div>
 
-      {/* BOTÕES */}
-      <button
-        className="toggle"
-        onClick={() => setMostrarLista(!mostrarLista)}
-      >
+      <button className="toggle" onClick={() => setMostrarLista(!mostrarLista)}>
         Trabalhos realizados (mês atual)
       </button>
 
-      {/* LISTA DO MÊS */}
       {mostrarLista && (
         <div className="card">
+          <h3>Subtotal do mês: R$ {subtotalMes.toFixed(2)}</h3>
+
           {trabalhosDoMes.length === 0 && (
             <p>Nenhum serviço realizado neste mês</p>
           )}
 
           {trabalhosDoMes.map(item => (
             <div key={item.id} className="item">
-              <strong>{item.servico}</strong> — {item.nome}
-              <br />
-              R$ {item.valor.toFixed(2)} | {item.data}
-              <br />
+              <strong>{item.servico}</strong> — {item.nome}<br />
+              R$ {item.valor.toFixed(2)} | {item.data}<br />
               {item.obs && <em>{item.obs}</em>}
+              <br />
+              <button className="edit" onClick={() => editarServico(item)}>
+                Editar
+              </button>
             </div>
           ))}
         </div>
       )}
 
-      {/* SUBTOTAL */}
       <div className="card">
         <h2>Subtotal por período</h2>
 
-        <input
-          type="date"
-          value={inicio}
-          onChange={e => setInicio(e.target.value)}
-        />
+        <input type="date" value={inicio} onChange={e => setInicio(e.target.value)} />
+        <input type="date" value={fim} onChange={e => setFim(e.target.value)} />
 
-        <input
-          type="date"
-          value={fim}
-          onChange={e => setFim(e.target.value)}
-        />
-
-        <button type="button" onClick={calcularSubtotal}>
-          Calcular
-        </button>
+        <button onClick={calcularSubtotal}>Calcular</button>
 
         <h3>Total: R$ {subtotal.toFixed(2)}</h3>
+
+        {servicosPeriodo.length > 0 && (
+          <>
+            <h4>Serviços do período</h4>
+            {servicosPeriodo.map(item => (
+              <div key={item.id} className="item">
+                <strong>{item.servico}</strong> — {item.nome}<br />
+                R$ {item.valor.toFixed(2)} | {item.data}<br />
+                {item.obs && <em>{item.obs}</em>}
+              </div>
+            ))}
+          </>
+        )}
       </div>
 
-      <button
-        className="toggle danger"
-        onClick={limparTudo}
-      >
+      <button className="danger" onClick={limparTodos}>
         Limpar todos os serviços
       </button>
     </div>

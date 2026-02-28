@@ -128,7 +128,7 @@ export default function App() {
 
         <input
           type="text"
-          placeholder="Nome"
+          placeholder="Nome Animal / Cliente"
           value={nome}
           onChange={e => setNome(e.target.value)}
         />

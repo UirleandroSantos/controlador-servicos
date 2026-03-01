@@ -99,5 +99,9 @@ button:hover {
   position: absolute;
   width: fit-content;
   right: 1rem;
-  top: 1rem;
+  bottom: 0.5rem;
+}
+
+.textServicoPeriodo, .textServicoVazio{
+  color: var(--text-muted);
 }

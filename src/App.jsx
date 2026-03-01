@@ -179,7 +179,7 @@ export default function App() {
           <h3>Subtotal do mês: R$ {subtotalMes.toFixed(2)}</h3>
 
           {trabalhosDoMes.length === 0 && (
-            <p>Nenhum serviço realizado neste mês</p>
+            <p className="textServicoVazio">Nenhum serviço realizado neste mês</p>
           )}
 
           {trabalhosDoMes.map(item => (
@@ -208,7 +208,7 @@ export default function App() {
 
         {servicosPeriodo.length > 0 && (
           <>
-            <h4>Serviços do período</h4>
+            <h4 className="textServicoPeriodo">Serviços do período</h4>
             {servicosPeriodo.map(item => (
               <div key={item.id} className="item">
                 <strong>{item.servico}</strong> — {item.nome}<br />

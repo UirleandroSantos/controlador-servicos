@@ -23,6 +23,12 @@
   gap: 1.5rem;
 }
 
+.nav{
+  text-decoration: none;
+  color: var(--text);
+  margin: 0 1rem;
+}
+
 .card {
   width: 100%;
   background: var(--card);

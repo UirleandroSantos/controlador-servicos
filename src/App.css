@@ -90,6 +90,7 @@ button:hover {
 
 .item {
   border-bottom: 1px solid var(--border);
+  
   padding: 10px 0;
   color: var(--text-muted);
   position: relative;
@@ -122,4 +123,8 @@ button:hover {
   padding: 0.5rem 0;
   text-align: center;
   background-color: var(--border);
+}
+
+.wrap{
+  height: 1rem;
 }

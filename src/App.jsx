@@ -245,6 +245,7 @@ export default function App() {
         <Route path="/gastos" element={<Gastos />} />
       </Routes>
 
+      <div className="wrap"></div>
       <span className="apresentation">Desenvolvido por <strong>Uirleandro Santos</strong></span>
     </div>
   );

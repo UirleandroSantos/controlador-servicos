@@ -111,3 +111,10 @@ button:hover {
 .textServicoPeriodo, .textServicoVazio{
   color: var(--text-muted);
 }
+
+.apresentation{
+  color: var(--text);
+  position: fixed;
+  bottom: 0.5rem;
+  z-index: 9999;
+}

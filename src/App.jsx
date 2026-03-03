@@ -244,6 +244,8 @@ export default function App() {
         <Route path="/" element={<Servicos />} />
         <Route path="/gastos" element={<Gastos />} />
       </Routes>
+
+      <span className="apresentation">Desenvolvido por <strong>Uirleandro Santos</strong></span>
     </div>
   );
 }

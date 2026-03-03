@@ -2,6 +2,11 @@ import { useEffect, useState } from "react";
 import "../App.css";
 
 export default function Gastos() {
+  const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado"));
+  if (!usuarioLogado) return null;
+
+  const chaveStorage = `gastos_${usuarioLogado.usuario}`;
+
   const hoje = new Date().toISOString().split("T")[0];
   const ano = new Date().getFullYear();
   const mes = String(new Date().getMonth() + 1).padStart(2, "0");
@@ -23,9 +28,14 @@ export default function Gastos() {
   const [editandoId, setEditandoId] = useState(null);
 
   useEffect(() => {
-    const dados = JSON.parse(localStorage.getItem("gastos")) || [];
+    const dados = JSON.parse(localStorage.getItem(chaveStorage)) || [];
     setLista(dados);
-  }, []);
+  }, [chaveStorage]);
+
+  const salvarLista = (novaLista) => {
+    setLista(novaLista);
+    localStorage.setItem(chaveStorage, JSON.stringify(novaLista));
+  };
 
   const limparFormulario = () => {
     setDescricao("");
@@ -46,8 +56,7 @@ export default function Gastos() {
           ? { ...item, descricao, valor: Number(valor), obs, data }
           : item
       );
-      setLista(atualizada);
-      localStorage.setItem("gastos", JSON.stringify(atualizada));
+      salvarLista(atualizada);
       setEditandoId(null);
     } else {
       const novo = {
@@ -57,9 +66,7 @@ export default function Gastos() {
         obs,
         data,
       };
-      const novaLista = [...lista, novo];
-      setLista(novaLista);
-      localStorage.setItem("gastos", JSON.stringify(novaLista));
+      salvarLista([...lista, novo]);
     }
 
     limparFormulario();
@@ -71,22 +78,13 @@ export default function Gastos() {
     setObs(item.obs || "");
     setData(item.data);
     setEditandoId(item.id);
-    window.scrollTo({ top: 0, behavior: "smooth" });
   };
-
-//   const limparTodos = () => {
-//     if (!window.confirm("Apagar TODOS os gastos?")) return;
-//     localStorage.removeItem("gastos");
-//     setLista([]);
-//     setSubtotal(0);
-//     setGastosPeriodo([]);
-//     setMostrarLista(false);
-//   };
 
   const calcularSubtotal = () => {
     const filtrados = lista.filter(
       i => (!inicio || i.data >= inicio) && (!fim || i.data <= fim)
     );
+
     setSubtotal(filtrados.reduce((s, i) => s + i.valor, 0));
     setGastosPeriodo(filtrados);
   };
@@ -102,26 +100,10 @@ export default function Gastos() {
       <h1>Controle de Gastos</h1>
 
       <div className="card">
-        <input
-          placeholder="Descrição do gasto"
-          value={descricao}
-          onChange={e => setDescricao(e.target.value)}
-        />
-
-        <input
-          type="number"
-          placeholder="Valor"
-          value={valor}
-          onChange={e => setValor(e.target.value)}
-        />
-
+        <input placeholder="Descrição do gasto" value={descricao} onChange={e => setDescricao(e.target.value)} />
+        <input type="number" placeholder="Valor" value={valor} onChange={e => setValor(e.target.value)} />
         <input type="date" value={data} onChange={e => setData(e.target.value)} />
-
-        <textarea
-          placeholder="Observações"
-          value={obs}
-          onChange={e => setObs(e.target.value)}
-        />
+        <textarea placeholder="Observações" value={obs} onChange={e => setObs(e.target.value)} />
 
         <button onClick={salvar}>
           {editandoId ? "Atualizar Gasto" : "Salvar Gasto"}
@@ -134,14 +116,13 @@ export default function Gastos() {
 
       {mostrarLista && (
         <div className="card">
-          <h3>Subtotal do mês: R$ {subtotalMes.toFixed(2).replace(".",",")}</h3>
+          <h3>Subtotal do mês: R$ {subtotalMes.toFixed(2).replace(".", ",")}</h3>
 
           {gastosDoMes.map(item => (
             <div key={item.id} className="item">
               <strong>{item.descricao}</strong><br />
-              R$ {item.valor.toFixed(2).replace(".",",")} | {item.data}<br />
-              {item.obs && <em>{item.obs}</em>}<br />
-              <button className="edit" onClick={() => editar(item)}>Editar</button>
+              R$ {item.valor.toFixed(2).replace(".", ",")} | {item.data}<br />
+              {item.obs && <em>{item.obs}</em>}
             </div>
           ))}
         </div>
@@ -149,10 +130,29 @@ export default function Gastos() {
 
       <div className="card">
         <h2>Consultar período</h2>
+
         <input type="date" value={inicio} onChange={e => setInicio(e.target.value)} />
         <input type="date" value={fim} onChange={e => setFim(e.target.value)} />
         <button onClick={calcularSubtotal}>Calcular</button>
-        <h3>Total: R$ {subtotal.toFixed(2).replace(".",",")}</h3>
+
+        <h3>Total: R$ {subtotal.toFixed(2).replace(".", ",")}</h3>
+
+        {gastosPeriodo.length > 0 && (
+          <>
+            <h3>Gastos no período:</h3>
+            {gastosPeriodo.map(item => (
+              <div key={item.id} className="item">
+                <strong>{item.descricao}</strong><br />
+                R$ {item.valor.toFixed(2).replace(".", ",")} | {item.data}<br />
+                {item.obs && <em>{item.obs}</em>}
+              </div>
+            ))}
+          </>
+        )}
+
+        {gastosPeriodo.length === 0 && inicio && fim && (
+          <p>Nenhum gasto encontrado no período.</p>
+        )}
       </div>
     </>
   );

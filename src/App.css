@@ -128,3 +128,14 @@ button:hover {
 .wrap{
   height: 1rem;
 }
+
+.topo{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.sair{
+  background-color: var(--danger);
+}

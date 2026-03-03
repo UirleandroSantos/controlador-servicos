@@ -78,19 +78,16 @@ export default function Servicos() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-//   const limparTodos = () => {
-//     if (!window.confirm("Apagar TODOS os serviços?")) return;
-//     localStorage.removeItem("servicos");
-//     setLista([]);
-//     setSubtotal(0);
-//     setServicosPeriodo([]);
-//     setMostrarLista(false);
-//   };
-
   const calcularSubtotal = () => {
+    if (!inicio || !fim) {
+      alert("Preencha a data inicial e final para calcular.");
+      return;
+    }
+
     const filtrados = lista.filter(
-      i => (!inicio || i.data >= inicio) && (!fim || i.data <= fim)
+      i => i.data >= inicio && i.data <= fim
     );
+
     setSubtotal(filtrados.reduce((s, i) => s + i.valor, 0));
     setServicosPeriodo(filtrados);
   };
@@ -114,9 +111,24 @@ export default function Servicos() {
           <option>Outro</option>
         </select>
 
-        <input placeholder="Nome" value={nome} onChange={e => setNome(e.target.value)} />
-        <input type="number" placeholder="Valor" value={valor} onChange={e => setValor(e.target.value)} />
-        <input type="date" value={data} onChange={e => setData(e.target.value)} />
+        <input
+          placeholder="Nome"
+          value={nome}
+          onChange={e => setNome(e.target.value)}
+        />
+
+        <input
+          type="number"
+          placeholder="Valor"
+          value={valor}
+          onChange={e => setValor(e.target.value)}
+        />
+
+        <input
+          type="date"
+          value={data}
+          onChange={e => setData(e.target.value)}
+        />
 
         <textarea
           placeholder="Observações"
@@ -129,20 +141,30 @@ export default function Servicos() {
         </button>
       </div>
 
-      <button className="toggle" onClick={() => setMostrarLista(!mostrarLista)}>
+      <button
+        className="toggle"
+        onClick={() => setMostrarLista(!mostrarLista)}
+      >
         Trabalhos do mês atual
       </button>
 
       {mostrarLista && (
         <div className="card">
-          <h3>Subtotal do mês: R$ {subtotalMes.toFixed(2).replace(".",",")}</h3>
+          <h3>
+            Subtotal do mês: R$ {subtotalMes.toFixed(2).replace(".", ",")}
+          </h3>
 
           {servicosDoMes.map(item => (
             <div key={item.id} className="item">
               <strong>{item.servico}</strong> — {item.nome}<br />
-              R$ {item.valor.toFixed(2).replace(".",",")} | {item.data}<br />
+              R$ {item.valor.toFixed(2).replace(".", ",")} | {item.data}<br />
               {item.obs && <em>{item.obs}</em>}<br />
-              <button className="edit" onClick={() => editar(item)}>Editar</button>
+              <button
+                className="edit"
+                onClick={() => editar(item)}
+              >
+                Editar
+              </button>
             </div>
           ))}
         </div>
@@ -150,10 +172,43 @@ export default function Servicos() {
 
       <div className="card">
         <h2>Consultar período</h2>
-        <input type="date" value={inicio} onChange={e => setInicio(e.target.value)} />
-        <input type="date" value={fim} onChange={e => setFim(e.target.value)} />
-        <button onClick={calcularSubtotal}>Calcular</button>
-        <h3>Total: R$ {subtotal.toFixed(2)}</h3>
+
+        <input
+          type="date"
+          value={inicio}
+          onChange={e => setInicio(e.target.value)}
+        />
+
+        <input
+          type="date"
+          value={fim}
+          onChange={e => setFim(e.target.value)}
+        />
+
+        <button onClick={calcularSubtotal}>
+          Calcular
+        </button>
+
+        <h3>
+          Total: R$ {subtotal.toFixed(2).replace(".", ",")}
+        </h3>
+
+        {servicosPeriodo.length > 0 && (
+          <>
+            <h3>Serviços no período:</h3>
+            {servicosPeriodo.map(item => (
+              <div key={item.id} className="item">
+                <strong>{item.servico}</strong> — {item.nome}<br />
+                R$ {item.valor.toFixed(2).replace(".", ",")} | {item.data}<br />
+                {item.obs && <em>{item.obs}</em>}
+              </div>
+            ))}
+          </>
+        )}
+
+        {servicosPeriodo.length === 0 && inicio && fim && (
+          <p>Nenhum serviço encontrado no período.</p>
+        )}
       </div>
     </>
   );

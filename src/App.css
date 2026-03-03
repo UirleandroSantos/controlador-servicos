@@ -114,7 +114,12 @@ button:hover {
 
 .apresentation{
   color: var(--text);
+  width: 100%;
   position: fixed;
   bottom: 0.5rem;
   z-index: 9999;
+  margin-bottom: -0.5rem;
+  padding: 0.5rem 0;
+  text-align: center;
+  background-color: var(--border);
 }

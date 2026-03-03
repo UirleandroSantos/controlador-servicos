@@ -88,6 +88,10 @@ export default function Login({ setUsuarioLogado }) {
           </button>
         </div>
       )}
+
+      <span className="apresentation">
+        Desenvolvido por <strong>Uirleandro Santos</strong>
+      </span>
     </div>
   );
 }

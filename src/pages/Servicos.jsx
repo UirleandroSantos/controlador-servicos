@@ -132,7 +132,7 @@ export default function Servicos() {
   );
 
   const totalGastos = gastosDoMes.reduce((s, i) => s + i.valor, 0);
-  const totalReceber = totalLiquido - totalGastos;
+  const totalReceber = (totalBruto - totalGastos) / 2;
 
   return (
     <div className="space-y-6">

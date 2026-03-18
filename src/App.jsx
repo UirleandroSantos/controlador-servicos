@@ -1,14 +1,14 @@
-import { Routes, Route, Link, Navigate } from "react-router-dom";
+import { Routes, Route, Link, Navigate, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import Servicos from "./pages/Servicos";
 import Gastos from "./pages/Gastos";
 import Login from "./pages/Login";
 import Usuarios from "./pages/Usuarios";
-import "./App.css";
 
 export default function App() {
   const [usuarioLogado, setUsuarioLogado] = useState(null);
   const [carregando, setCarregando] = useState(true);
+  const location = useLocation();
 
   useEffect(() => {
     try {
@@ -30,9 +30,7 @@ export default function App() {
       }
 
       const user = JSON.parse(localStorage.getItem("usuarioLogado"));
-      if (user) {
-        setUsuarioLogado(user);
-      }
+      if (user) setUsuarioLogado(user);
     } catch (erro) {
       console.error("Erro:", erro);
       localStorage.clear();
@@ -46,47 +44,77 @@ export default function App() {
     setUsuarioLogado(null);
   };
 
-  if (carregando) return null;
+  const linkClass = (path) =>
+    `px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
+      location.pathname === path
+        ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-md scale-105"
+        : "bg-slate-800 text-gray-300 hover:bg-blue-500 hover:text-white hover:scale-105"
+    }`;
 
-  if (!usuarioLogado) {
-    return <Login setUsuarioLogado={setUsuarioLogado} />;
-  }
+  if (carregando) return null;
+  if (!usuarioLogado) return <Login setUsuarioLogado={setUsuarioLogado} />;
 
   return (
-    <div className="container">
-      <header className="topo">
-        <span className="nav">
-          Bem-vindo, <strong>{usuarioLogado.usuario}</strong>
-        </span>
+    <div className="flex flex-col min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-gray-200">
 
-        <div className="links">
-          <Link to="/" className="nav">Serviços</Link>
-          <Link to="/gastos" className="nav">Gastos</Link>
+      {/* HEADER */}
+      <header className="bg-slate-800/90 backdrop-blur border-b border-slate-700 shadow-lg">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+
+          {/* TEXTO */}
+          <div className="text-center md:text-left">
+            <p className="text-xs text-gray-400 tracking-wide uppercase">
+              Sistema
+            </p>
+            <h2 className="text-xl font-bold text-white">
+              Bem-vindo, <span className="text-blue-400">{usuarioLogado.usuario}</span>
+            </h2>
+          </div>
+
+          {/* MENU */}
+          <div className="flex gap-3 flex-wrap justify-center">
+            <Link to="/" className={linkClass("/")}>Serviços</Link>
+            <Link to="/gastos" className={linkClass("/gastos")}>Gastos</Link>
+
+            {usuarioLogado.role === "admin" && (
+              <Link to="/usuarios" className={linkClass("/usuarios")}>
+                Usuários
+              </Link>
+            )}
+          </div>
+
+          {/* BOTÃO SAIR */}
+          <button
+            onClick={logout}
+            className="bg-red-600 hover:bg-red-700 transition-all duration-200 px-5 py-2 rounded-xl text-sm font-semibold shadow-md hover:scale-105"
+          >
+            Sair
+          </button>
         </div>
-
-        {usuarioLogado.role === "admin" && (
-          <Link to="/usuarios" className="nav">Usuários</Link>
-        )}
       </header>
 
-      <Routes>
-        <Route path="/" element={<Servicos />} />
-        <Route path="/gastos" element={<Gastos />} />
+      {/* CONTEÚDO */}
+      <main className="flex-1 w-full max-w-7xl mx-auto p-6">
+        <div className="bg-slate-800/60 backdrop-blur rounded-2xl shadow-xl p-6 border border-slate-700 min-h-[400px]">
+          <Routes>
+            <Route path="/" element={<Servicos />} />
+            <Route path="/gastos" element={<Gastos />} />
+            {usuarioLogado.role === "admin" && (
+              <Route path="/usuarios" element={<Usuarios />} />
+            )}
+            <Route path="*" element={<Navigate to="/" />} />
+          </Routes>
+        </div>
+      </main>
 
-        {usuarioLogado.role === "admin" && (
-          <Route path="/usuarios" element={<Usuarios />} />
-        )}
+      {/* FOOTER FIXO */}
+      <footer className="bg-slate-800 border-t border-slate-700 text-center py-3 text-sm text-gray-400">
+        Desenvolvido por{" "}
+        <strong className="text-gray-300">
+          Uirleandro Santos
+        </strong>
+      </footer>
 
-        <Route path="*" element={<Navigate to="/" />} />
-      </Routes>
-
-      <button onClick={logout} className="sair">
-        Sair
-      </button>
-      <div className="wrap"></div>
-      <span className="apresentation">
-        Desenvolvido por <strong>Uirleandro Santos</strong>
-      </span>
     </div>
   );
 }

@@ -1,11 +1,9 @@
 import { useEffect, useState } from "react";
-import "../App.css";
+import { supabase } from "../../services/supabase";
 
 export default function Servicos() {
   const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado"));
   if (!usuarioLogado) return null;
-
-  const chaveStorage = `servicos_${usuarioLogado.usuario}`;
 
   const hoje = new Date().toISOString().split("T")[0];
   const ano = new Date().getFullYear();
@@ -19,23 +17,38 @@ export default function Servicos() {
   const [data, setData] = useState(hoje);
 
   const [lista, setLista] = useState([]);
+  const [gastos, setGastos] = useState([]);
+
   const [mostrarLista, setMostrarLista] = useState(false);
+  const [editandoId, setEditandoId] = useState(null);
 
   const [inicio, setInicio] = useState("");
   const [fim, setFim] = useState("");
-  const [subtotal, setSubtotal] = useState(0);
+  const [subtotalPeriodo, setSubtotalPeriodo] = useState(0);
   const [servicosPeriodo, setServicosPeriodo] = useState([]);
 
-  const [editandoId, setEditandoId] = useState(null);
-
   useEffect(() => {
-    const dados = JSON.parse(localStorage.getItem(chaveStorage)) || [];
-    setLista(dados);
-  }, [chaveStorage]);
+    carregar();
+    carregarGastos();
+  }, []);
 
-  const salvarLista = (novaLista) => {
-    setLista(novaLista);
-    localStorage.setItem(chaveStorage, JSON.stringify(novaLista));
+  const carregar = async () => {
+    const { data } = await supabase
+      .from("servicos")
+      .select("*")
+      .eq("usuario_id", usuarioLogado.id)
+      .order("data", { ascending: false });
+
+    setLista(data || []);
+  };
+
+  const carregarGastos = async () => {
+    const { data } = await supabase
+      .from("gastos")
+      .select("*")
+      .eq("usuario_id", usuarioLogado.id);
+
+    setGastos(data || []);
   };
 
   const limparFormulario = () => {
@@ -46,33 +59,46 @@ export default function Servicos() {
     setData(hoje);
   };
 
-  const salvar = () => {
+  const salvar = async () => {
     if (!servico || !nome || !valor) {
-      alert("Preencha Serviço, Nome e Valor");
+      alert("Preencha tudo");
       return;
     }
 
     if (editandoId) {
-      const atualizada = lista.map(item =>
-        item.id === editandoId
-          ? { ...item, servico, nome, valor: Number(valor), obs, data }
-          : item
-      );
-      salvarLista(atualizada);
-      setEditandoId(null);
+      await supabase
+        .from("servicos")
+        .update({
+          servico,
+          nome,
+          valor: Number(valor),
+          obs,
+          data
+        })
+        .eq("id", editandoId);
     } else {
-      const novo = {
-        id: Date.now(),
-        servico,
-        nome,
-        valor: Number(valor),
-        obs,
-        data,
-      };
-      salvarLista([...lista, novo]);
+      await supabase.from("servicos").insert([
+        {
+          usuario_id: usuarioLogado.id,
+          servico,
+          nome,
+          valor: Number(valor),
+          obs,
+          data
+        }
+      ]);
     }
 
+    setEditandoId(null);
     limparFormulario();
+    carregar();
+  };
+
+  const excluir = async (id) => {
+    if (!window.confirm("Deseja excluir este serviço?")) return;
+
+    await supabase.from("servicos").delete().eq("id", id);
+    carregar();
   };
 
   const editar = (item) => {
@@ -85,17 +111,12 @@ export default function Servicos() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const calcularSubtotal = () => {
-    if (!inicio || !fim) {
-      alert("Preencha a data inicial e final");
-      return;
-    }
-
+  const calcularPeriodo = () => {
     const filtrados = lista.filter(
-      i => i.data >= inicio && i.data <= fim
+      i => (!inicio || i.data >= inicio) && (!fim || i.data <= fim)
     );
 
-    setSubtotal(filtrados.reduce((s, i) => s + i.valor, 0));
+    setSubtotalPeriodo(filtrados.reduce((s, i) => s + i.valor, 0));
     setServicosPeriodo(filtrados);
   };
 
@@ -103,76 +124,174 @@ export default function Servicos() {
     i => i.data >= primeiroDiaDoMes && i.data <= hoje
   );
 
-  const subtotalMes = servicosDoMes.reduce((s, i) => s + i.valor, 0);
+  const totalBruto = servicosDoMes.reduce((s, i) => s + i.valor, 0);
+  const totalLiquido = totalBruto / 2;
+
+  const gastosDoMes = gastos.filter(
+    i => i.data >= primeiroDiaDoMes && i.data <= hoje
+  );
+
+  const totalGastos = gastosDoMes.reduce((s, i) => s + i.valor, 0);
+  const totalReceber = totalLiquido - totalGastos;
 
   return (
-    <>
-      <h1>Controle de Serviços</h1>
+    <div className="space-y-6">
 
-      <div className="card">
-        <select value={servico} onChange={e => setServico(e.target.value)}>
-          <option value="" disabled>Selecione o serviço</option>
-          <option>Banho</option>
-          <option>Banho + Tosa Higiênica</option>
-          <option>Banho + Tosa Completa</option>
-          <option>Outro</option>
-        </select>
+      <div>
+        <h1 className="text-3xl font-bold text-white">Controle de Serviços</h1>
+        <p className="text-gray-400 text-sm">
+          Cadastre e acompanhe seus serviços
+        </p>
+      </div>
 
-        <input placeholder="Nome" value={nome} onChange={e => setNome(e.target.value)} />
-        <input type="number" placeholder="Valor" value={valor} onChange={e => setValor(e.target.value)} />
-        <input type="date" value={data} onChange={e => setData(e.target.value)} />
-        <textarea placeholder="Observações" value={obs} onChange={e => setObs(e.target.value)} />
+      {/* FORM */}
+      <div className="bg-slate-800/70 backdrop-blur border border-slate-700 p-6 rounded-2xl shadow-xl space-y-4">
 
-        <button onClick={salvar}>
+        <div className="grid md:grid-cols-2 gap-4">
+
+          <select
+            value={servico}
+            onChange={e => setServico(e.target.value)}
+            className="bg-slate-900 border border-slate-600 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+          >
+            <option value="" disabled>Selecione o serviço</option>
+            <option>Banho</option>
+            <option>Banho + Tosa Higiênica</option>
+            <option>Banho + Tosa Completa</option>
+            <option>Outro</option>
+          </select>
+
+          <input
+            className="bg-slate-900 border border-slate-600 p-3 rounded-xl"
+            placeholder="Nome do cliente"
+            value={nome}
+            onChange={e => setNome(e.target.value)}
+          />
+
+          <input
+            type="number"
+            className="bg-slate-900 border border-slate-600 p-3 rounded-xl"
+            placeholder="Valor (R$)"
+            value={valor}
+            onChange={e => setValor(e.target.value)}
+          />
+
+          <input
+            type="date"
+            className="bg-slate-900 border border-slate-600 p-3 rounded-xl"
+            value={data}
+            onChange={e => setData(e.target.value)}
+          />
+        </div>
+
+        <textarea
+          className="w-full bg-slate-900 border border-slate-600 p-3 rounded-xl"
+          placeholder="Observações"
+          value={obs}
+          onChange={e => setObs(e.target.value)}
+        />
+
+        <button
+          onClick={salvar}
+          className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 py-3 rounded-xl font-semibold"
+        >
           {editandoId ? "Atualizar Serviço" : "Salvar Serviço"}
         </button>
       </div>
 
-      <button className="toggle" onClick={() => setMostrarLista(!mostrarLista)}>
-        Trabalhos do mês atual
+      {/* BOTÃO */}
+      <button
+        onClick={() => setMostrarLista(!mostrarLista)}
+        className="bg-slate-700 hover:bg-slate-600 px-5 py-2 rounded-xl"
+      >
+        {mostrarLista ? "Ocultar Trabalhos" : "Ver Trabalhos do Mês"}
       </button>
 
       {mostrarLista && (
-        <div className="card">
-          <h3>Subtotal do mês: R$ {subtotalMes.toFixed(2).replace(".", ",")}</h3>
+        <div className="space-y-6">
 
-          {servicosDoMes.map(item => (
-            <div key={item.id} className="item">
-              <strong>{item.servico}</strong> — {item.nome}<br />
-              R$ {item.valor.toFixed(2).replace(".", ",")} | {item.data}<br />
-              {item.obs && <em>{item.obs}</em>}<br />
-              <button className="edit" onClick={() => editar(item)}>Editar</button>
-            </div>
-          ))}
+          {/* RESUMO */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card titulo="Bruto" valor={totalBruto} cor="text-green-400" />
+            <Card titulo="Líquido" valor={totalLiquido} cor="text-blue-400" />
+            <Card titulo="Gastos" valor={totalGastos} cor="text-red-400" />
+            <Card titulo="Receber" valor={totalReceber} cor="text-purple-400" />
+          </div>
+
+          {/* LISTA COM BOTÕES */}
+          <div className="bg-slate-800/70 border border-slate-700 p-5 rounded-2xl space-y-3">
+            {servicosDoMes.map(item => (
+              <div
+                key={item.id}
+                className="flex justify-between items-center border-b border-slate-700 pb-3"
+              >
+                <div>
+                  <p className="font-medium text-white">
+                    {item.servico} — {item.nome}
+                  </p>
+                  <p className="text-sm text-gray-400">
+                    {item.data} • R$ {item.valor}
+                  </p>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => editar(item)}
+                    className="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded-lg text-sm"
+                  >
+                    Editar
+                  </button>
+
+                  <button
+                    onClick={() => excluir(item.id)}
+                    className="bg-red-600 hover:bg-red-700 px-3 py-1 rounded-lg text-sm"
+                  >
+                    Excluir
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
         </div>
       )}
 
-      <div className="card">
-        <h2>Consultar período</h2>
+      {/* PERÍODO */}
+      <div className="bg-slate-800/70 border border-slate-700 p-6 rounded-2xl space-y-4">
+        <h2 className="text-xl font-semibold text-white">Consultar por período</h2>
 
-        <input type="date" value={inicio} onChange={e => setInicio(e.target.value)} />
-        <input type="date" value={fim} onChange={e => setFim(e.target.value)} />
-        <button onClick={calcularSubtotal}>Calcular</button>
+        <div className="grid md:grid-cols-2 gap-4">
+          <input type="date" value={inicio} onChange={e => setInicio(e.target.value)} className="bg-slate-900 p-3 rounded-xl" />
+          <input type="date" value={fim} onChange={e => setFim(e.target.value)} className="bg-slate-900 p-3 rounded-xl" />
+        </div>
 
-        <h3>Total: R$ {subtotal.toFixed(2).replace(".", ",")}</h3>
+        <button
+          onClick={calcularPeriodo}
+          className="w-full bg-indigo-600 py-2 rounded-xl"
+        >
+          Calcular período
+        </button>
 
-        {servicosPeriodo.length > 0 && (
-          <>
-            <h3>Serviços no período:</h3>
-            {servicosPeriodo.map(item => (
-              <div key={item.id} className="item">
-                <strong>{item.servico}</strong> — {item.nome}<br />
-                R$ {item.valor.toFixed(2).replace(".", ",")} | {item.data}<br />
-                {item.obs && <em>{item.obs}</em>}
-              </div>
-            ))}
-          </>
-        )}
+        <h3>
+          Total: <span className="text-green-400">R$ {subtotalPeriodo.toFixed(2)}</span>
+        </h3>
 
-        {servicosPeriodo.length === 0 && inicio && fim && (
-          <p>Nenhum serviço encontrado no período.</p>
-        )}
+        {servicosPeriodo.map(item => (
+          <div key={item.id}>
+            {item.servico} — R$ {item.valor} | {item.data}
+          </div>
+        ))}
       </div>
-    </>
+    </div>
+  );
+}
+
+/* COMPONENTE CARD */
+function Card({ titulo, valor, cor }) {
+  return (
+    <div className="bg-slate-800 border border-slate-700 p-4 rounded-xl text-center">
+      <p className="text-gray-400 text-sm">{titulo}</p>
+      <h2 className={`font-bold ${cor}`}>R$ {valor.toFixed(2)}</h2>
+    </div>
   );
 }

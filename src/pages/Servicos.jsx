@@ -276,11 +276,25 @@ export default function Servicos() {
           Total: <span className="text-green-400">R$ {subtotalPeriodo.toFixed(2)}</span>
         </h3>
 
-        {servicosPeriodo.map(item => (
-          <div key={item.id}>
-            {item.servico} — R$ {item.valor} | {item.data}
-          </div>
-        ))}
+        <div className="space-y-3">
+          {servicosPeriodo.map(item => (
+            <div
+              key={item.id}
+              className="bg-slate-900 border border-slate-700 p-4 rounded-xl shadow-md hover:shadow-lg transition"
+            >
+              <p className="text-white font-semibold">
+                {item.servico} — {item.nome}
+              </p>
+              <p className="text-sm text-gray-400">
+                {item.data}
+              </p>
+              <p className="text-green-400 font-bold mt-1">
+                R$ {item.valor}
+              </p>
+            </div>
+          ))}
+        </div>
+
       </div>
     </div>
   );

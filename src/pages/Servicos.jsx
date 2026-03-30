@@ -230,7 +230,7 @@ export default function Servicos() {
           {/* BUSCA */}
           <input
             type="text"
-            placeholder="Buscar serviço, cliente..."
+            placeholder="Buscar serviço..."
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             className="w-full bg-slate-900 border border-slate-600 p-3 rounded-xl"
@@ -285,8 +285,14 @@ export default function Servicos() {
         <h2 className="text-xl font-semibold text-white">Consultar por período</h2>
 
         <div className="grid md:grid-cols-2 gap-4">
-          <input type="date" value={inicio} onChange={e => setInicio(e.target.value)} className="bg-slate-900 p-3 rounded-xl" />
-          <input type="date" value={fim} onChange={e => setFim(e.target.value)} className="bg-slate-900 p-3 rounded-xl" />
+          <div className="grid md:grid-cols-2">
+            <label>Data Inicio</label>
+            <input type="date" value={inicio} onChange={e => setInicio(e.target.value)} className="bg-slate-900 p-3 rounded-xl" />
+          </div>
+          <div className="grid md:grid-cols-2">
+            <label>Data Fim</label>
+            <input type="date" value={fim} onChange={e => setFim(e.target.value)} className="bg-slate-900 p-3 rounded-xl" />
+          </div>
         </div>
 
         <button

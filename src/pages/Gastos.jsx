@@ -198,28 +198,28 @@ export default function Gastos() {
             <div className="bg-slate-800 border border-slate-700 p-4 rounded-xl text-center shadow">
               <p className="text-gray-400 text-sm">Total</p>
               <h2 className="text-red-400 font-bold text-lg">
-                R$ {subtotalMes.toFixed(2)}
+                R$ {subtotalMes.toFixed(2).replace(".",",")}
               </h2>
             </div>
 
             <div className="bg-slate-800 border border-slate-700 p-4 rounded-xl text-center shadow">
               <p className="text-gray-400 text-sm">Almoço</p>
               <h2 className="text-yellow-400 font-bold text-lg">
-                R$ {totais["Almoço"].toFixed(2)}
+                R$ {totais["Almoço"].toFixed(2).replace(".",",")}
               </h2>
             </div>
 
             <div className="bg-slate-800 border border-slate-700 p-4 rounded-xl text-center shadow">
               <p className="text-gray-400 text-sm">Combustível</p>
               <h2 className="text-blue-400 font-bold text-lg">
-                R$ {totais["Combustível"].toFixed(2)}
+                R$ {totais["Combustível"].toFixed(2).replace(".",",")}
               </h2>
             </div>
 
             <div className="bg-slate-800 border border-slate-700 p-4 rounded-xl text-center shadow">
               <p className="text-gray-400 text-sm">Outros</p>
               <h2 className="text-purple-400 font-bold text-lg">
-                R$ {totais["Outro"].toFixed(2)}
+                R$ {totais["Outro"].toFixed(2).replace(".",",")}
               </h2>
             </div>
 
@@ -235,7 +235,7 @@ export default function Gastos() {
                 <div>
                   <p className="text-white font-semibold">{item.descricao}</p>
                   <p className="text-sm text-gray-400">
-                    R$ {item.valor} • {item.data}
+                    R$ {item.valor.toFixed(2).replace(".",",")} • {item.data}
                   </p>
                   {item.obs && (
                     <p className="text-xs text-gray-500">{item.obs}</p>
@@ -300,7 +300,7 @@ export default function Gastos() {
         </button>
 
         <h3 className="text-lg">
-          Total: <span className="text-green-400 font-semibold">R$ {subtotal.toFixed(2)}</span>
+          Total: <span className="text-green-400 font-semibold">R$ {subtotal.toFixed(2).replace(".",",")}</span>
         </h3>
 
         <div className="space-y-2">
@@ -309,7 +309,7 @@ export default function Gastos() {
               key={item.id}
               className="text-sm border-b border-slate-700 pb-1"
             >
-              {item.descricao} — R$ {item.valor} • {item.data}
+              {item.descricao} — R$ {item.valor.toFixed(2).replace(".",",")} • {item.data}
             </div>
           ))}
 

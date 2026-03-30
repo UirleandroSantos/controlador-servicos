@@ -248,7 +248,7 @@ export default function Servicos() {
                     {item.servico} — {item.nome}
                   </p>
                   <p className="text-sm text-gray-400">
-                    {item.data} • R$ {item.valor}
+                    {item.data} • R$ {item.valor.toFixed(2).replace(".",",")}
                   </p>
                 </div>
 
@@ -303,7 +303,7 @@ export default function Servicos() {
         </button>
 
         <h3>
-          Total: <span className="text-green-400">R$ {subtotalPeriodo.toFixed(2)}</span>
+          Total: <span className="text-green-400">R$ {subtotalPeriodo.toFixed(2).replace(".",",")}</span>
         </h3>
 
         <div className="space-y-3">
@@ -319,7 +319,7 @@ export default function Servicos() {
                 {item.data}
               </p>
               <p className="text-green-400 font-bold mt-1">
-                R$ {item.valor}
+                R$ {item.valor.toFixed(2).replace(".",",")}
               </p>
             </div>
           ))}
@@ -335,7 +335,7 @@ function Card({ titulo, valor, cor }) {
   return (
     <div className="bg-slate-800 border border-slate-700 p-4 rounded-xl text-center">
       <p className="text-gray-400 text-sm">{titulo}</p>
-      <h2 className={`font-bold ${cor}`}>R$ {valor.toFixed(2)}</h2>
+      <h2 className={`font-bold ${cor}`}>R$ {valor.toFixed(2).replace(".",",")}</h2>
     </div>
   );
 }

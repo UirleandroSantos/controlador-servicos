@@ -64,7 +64,7 @@ export default function App() {
           {/* TEXTO */}
           <div className="text-center md:text-left">
             <p className="text-xs text-gray-400 tracking-wide uppercase">
-              Sistema
+              Controle serviços
             </p>
             <h2 className="text-xl font-bold text-white">
               Bem-vindo, <span className="text-blue-400">{usuarioLogado.usuario}</span>

@@ -230,7 +230,7 @@ export default function Servicos() {
           {/* BUSCA */}
           <input
             type="text"
-            placeholder="Buscar serviço, cliente ou observação..."
+            placeholder="Buscar serviço, cliente..."
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             className="w-full bg-slate-900 border border-slate-600 p-3 rounded-xl"

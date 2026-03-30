@@ -27,6 +27,9 @@ export default function Servicos() {
   const [subtotalPeriodo, setSubtotalPeriodo] = useState(0);
   const [servicosPeriodo, setServicosPeriodo] = useState([]);
 
+  // BUSCA
+  const [busca, setBusca] = useState("");
+
   useEffect(() => {
     carregar();
     carregarGastos();
@@ -124,6 +127,12 @@ export default function Servicos() {
     i => i.data >= primeiroDiaDoMes && i.data <= hoje
   );
 
+  const servicosFiltrados = servicosDoMes.filter(item =>
+    item.servico.toLowerCase().includes(busca.toLowerCase()) ||
+    item.nome.toLowerCase().includes(busca.toLowerCase()) ||
+    (item.obs || "").toLowerCase().includes(busca.toLowerCase())
+  );
+
   const totalBruto = servicosDoMes.reduce((s, i) => s + i.valor, 0);
   const totalLiquido = totalBruto / 2;
 
@@ -218,9 +227,18 @@ export default function Servicos() {
             <Card titulo="Receber" valor={totalReceber} cor="text-purple-400" />
           </div>
 
-          {/* LISTA COM BOTÕES */}
+          {/* BUSCA */}
+          <input
+            type="text"
+            placeholder="Buscar serviço, cliente ou observação..."
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            className="w-full bg-slate-900 border border-slate-600 p-3 rounded-xl"
+          />
+
+          {/* LISTA */}
           <div className="bg-slate-800/70 border border-slate-700 p-5 rounded-2xl space-y-3">
-            {servicosDoMes.map(item => (
+            {servicosFiltrados.map(item => (
               <div
                 key={item.id}
                 className="flex justify-between items-center border-b border-slate-700 pb-3"
@@ -251,6 +269,12 @@ export default function Servicos() {
                 </div>
               </div>
             ))}
+
+            {servicosFiltrados.length === 0 && (
+              <p className="text-gray-400 text-center">
+                Nenhum resultado encontrado
+              </p>
+            )}
           </div>
 
         </div>

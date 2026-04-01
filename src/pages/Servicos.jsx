@@ -22,10 +22,18 @@ export default function Servicos() {
   const [mostrarLista, setMostrarLista] = useState(false);
   const [editandoId, setEditandoId] = useState(null);
 
-  const [inicio, setInicio] = useState("");
-  const [fim, setFim] = useState("");
+  // ALTERAÇÃO AQUI
+  const [inicio, setInicio] = useState(primeiroDiaDoMes);
+  const [fim, setFim] = useState(hoje);
+
   const [subtotalPeriodo, setSubtotalPeriodo] = useState(0);
   const [servicosPeriodo, setServicosPeriodo] = useState([]);
+
+  // NOVOS STATES PARA OS CARDS DO PERÍODO
+  const [brutoPeriodo, setBrutoPeriodo] = useState(0);
+  const [liquidoPeriodo, setLiquidoPeriodo] = useState(0);
+  const [gastosPeriodo, setGastosPeriodo] = useState(0);
+  const [receberPeriodo, setReceberPeriodo] = useState(0);
 
   // BUSCA
   const [busca, setBusca] = useState("");
@@ -34,6 +42,12 @@ export default function Servicos() {
     carregar();
     carregarGastos();
   }, []);
+
+  // GARANTE PADRÃO SEMPRE QUE CARREGAR
+  useEffect(() => {
+    setInicio(primeiroDiaDoMes);
+    setFim(hoje);
+  }, [primeiroDiaDoMes, hoje]);
 
   const carregar = async () => {
     const { data } = await supabase
@@ -119,9 +133,30 @@ export default function Servicos() {
       i => (!inicio || i.data >= inicio) && (!fim || i.data <= fim)
     );
 
-    setSubtotalPeriodo(filtrados.reduce((s, i) => s + i.valor, 0));
+    const gastosFiltrados = gastos.filter(
+      i => (!inicio || i.data >= inicio) && (!fim || i.data <= fim)
+    );
+
+    const bruto = filtrados.reduce((s, i) => s + i.valor, 0);
+    const gastosTotal = gastosFiltrados.reduce((s, i) => s + i.valor, 0);
+    const liquido = bruto / 2;
+    const receber = (bruto - gastosTotal) / 2;
+
+    setSubtotalPeriodo(bruto);
     setServicosPeriodo(filtrados);
+
+    // SET DOS CARDS
+    setBrutoPeriodo(bruto);
+    setLiquidoPeriodo(liquido);
+    setGastosPeriodo(gastosTotal);
+    setReceberPeriodo(receber);
   };
+
+  const servicosPeriodoFiltrados = servicosPeriodo.filter(item =>
+    item.servico.toLowerCase().includes(busca.toLowerCase()) ||
+    item.nome.toLowerCase().includes(busca.toLowerCase()) ||
+    (item.obs || "").toLowerCase().includes(busca.toLowerCase())
+  );
 
   const servicosDoMes = lista.filter(
     i => i.data >= primeiroDiaDoMes && i.data <= hoje
@@ -295,6 +330,14 @@ export default function Servicos() {
           </div>
         </div>
 
+        <input
+          type="text"
+          placeholder="Buscar no período..."
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          className="w-full bg-slate-900 border border-slate-600 p-3 rounded-xl"
+        />
+
         <button
           onClick={calcularPeriodo}
           className="w-full bg-indigo-600 py-2 rounded-xl"
@@ -302,12 +345,22 @@ export default function Servicos() {
           Calcular período
         </button>
 
+        {/* CARDS DO PERÍODO */}
+        {servicosPeriodo.length > 0 && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card titulo="Bruto" valor={brutoPeriodo} cor="text-green-400" />
+            <Card titulo="Líquido" valor={liquidoPeriodo} cor="text-blue-400" />
+            <Card titulo="Gastos" valor={gastosPeriodo} cor="text-red-400" />
+            <Card titulo="Receber" valor={receberPeriodo} cor="text-purple-400" />
+          </div>
+        )}
+
         <h3>
           Total: <span className="text-green-400">R$ {subtotalPeriodo.toFixed(2).replace(".",",")}</span>
         </h3>
 
         <div className="space-y-3">
-          {servicosPeriodo.map(item => (
+          {servicosPeriodoFiltrados.map(item => (  // 👈 ÚNICA ALTERAÇÃO AQUI
             <div
               key={item.id}
               className="bg-slate-900 border border-slate-700 p-4 rounded-xl shadow-md hover:shadow-lg transition"

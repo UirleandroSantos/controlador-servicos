@@ -95,8 +95,8 @@ export default function App() {
       </header>
 
       {/* CONTEÚDO */}
-      <main className="flex-1 w-full max-w-7xl mx-auto p-6">
-        <div className="bg-slate-800/60 backdrop-blur rounded-2xl shadow-xl p-6 border border-slate-700 min-h-[400px]">
+      <main className="flex-1 w-full p-4">
+        <div className="bg-slate-800/60 backdrop-blur rounded-3xl shadow-xl p-4 border border-slate-700 min-h-[400px]">
           <Routes>
             <Route path="/" element={<Servicos />} />
             <Route path="/gastos" element={<Gastos />} />

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../services/supabase";
+import { Pencil, Trash } from "lucide-react";
 
 export default function Gastos() {
   const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado"));
@@ -230,31 +231,31 @@ export default function Gastos() {
             {gastosDoMes.map(item => (
               <div
                 key={item.id}
-                className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 border-b border-slate-700 pb-3 hover:bg-slate-700/30 px-3 py-2 rounded-lg transition"
+                className="flex md:flex-row md:justify-between md:items-center gap-3 border-b border-slate-700 pb-3 hover:bg-slate-700/30 px-3 py-2 rounded-lg transition"
               >
                 <div>
                   <p className="text-white font-semibold">{item.descricao}</p>
                   <p className="text-sm text-gray-400">
-                    R$ {item.valor.toFixed(2).replace(".",",")} • {item.data}
+                    <span className="text-red-400">R$ {item.valor.toFixed(2).replace(".",",")}</span> • {item.data}
                   </p>
                   {item.obs && (
                     <p className="text-xs text-gray-500">{item.obs}</p>
                   )}
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2 ml-auto">
                   <button
                     onClick={() => editar(item)}
-                    className="bg-yellow-500 hover:bg-yellow-600 px-3 py-1 rounded-lg text-black font-semibold transition"
+                    className="bg-blue-500  px-2 py-1 rounded-lg w-fit"
                   >
-                    Editar
+                    <Pencil size={16} />
                   </button>
 
                   <button
                     onClick={() => excluir(item.id)}
-                    className="bg-red-600 hover:bg-red-700 px-3 py-1 rounded-lg text-white transition"
+                    className="bg-red-500 px-2 py-1 rounded-lg w-fit"
                   >
-                    Excluir
+                    <Trash size={16} />
                   </button>
                 </div>
               </div>

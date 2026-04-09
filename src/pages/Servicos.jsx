@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../services/supabase";
+import { Pencil, Trash } from "lucide-react";
 
 export default function Servicos() {
   const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado"));
@@ -255,7 +256,7 @@ export default function Servicos() {
         <div className="space-y-6">
 
           {/* RESUMO */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
             <Card titulo="Bruto" valor={totalBruto} cor="text-green-400" />
             <Card titulo="Líquido" valor={totalLiquido} cor="text-blue-400" />
             <Card titulo="Gastos" valor={totalGastos} cor="text-red-400" />
@@ -283,23 +284,23 @@ export default function Servicos() {
                     {item.servico} — {item.nome}
                   </p>
                   <p className="text-sm text-gray-400">
-                    {item.data} • R$ {item.valor.toFixed(2).replace(".",",")}
+                    {item.data} • <span className="text-green-400">R$ {item.valor.toFixed(2).replace(".",",")}</span>
                   </p>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2">
                   <button
                     onClick={() => editar(item)}
-                    className="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded-lg text-sm"
+                    className="bg-blue-500  px-2 py-1 rounded-lg w-fit"
                   >
-                    Editar
+                    <Pencil size={16} />
                   </button>
 
                   <button
                     onClick={() => excluir(item.id)}
-                    className="bg-red-600 hover:bg-red-700 px-3 py-1 rounded-lg text-sm"
+                    className="bg-red-500 px-2 py-1 rounded-lg w-fit"
                   >
-                    Excluir
+                    <Trash size={16} />
                   </button>
                 </div>
               </div>

@@ -4,6 +4,7 @@ import Servicos from "./pages/Servicos";
 import Gastos from "./pages/Gastos";
 import Login from "./pages/Login";
 import Usuarios from "./pages/Usuarios";
+import { LogOut } from "lucide-react";
 
 export default function App() {
   const [usuarioLogado, setUsuarioLogado] = useState(null);
@@ -72,7 +73,7 @@ export default function App() {
           </div>
 
           {/* MENU */}
-          <div className="flex gap-3 flex-wrap justify-center">
+          <div className="flex gap- flex-wrap justify-center">
             <Link to="/" className={linkClass("/")}>Serviços</Link>
             <Link to="/gastos" className={linkClass("/gastos")}>Gastos</Link>
 
@@ -86,9 +87,9 @@ export default function App() {
           {/* BOTÃO SAIR */}
           <button
             onClick={logout}
-            className="bg-red-600 hover:bg-red-700 transition-all duration-200 px-5 py-2 rounded-xl text-sm font-semibold shadow-md hover:scale-105"
+            className="absolute right-5 bg-red-600 hover:bg-red-700 px-3 py-2 rounded-xl"
           >
-            Sair
+            <LogOut size={16} />
           </button>
         </div>
       </header>

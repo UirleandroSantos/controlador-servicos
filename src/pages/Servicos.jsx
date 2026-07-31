@@ -11,7 +11,10 @@ import {
   Eye, 
   EyeOff, 
   CheckCircle2,
-  Filter
+  Filter,
+  Share2,
+  Send,
+  X
 } from "lucide-react";
 
 export default function Servicos() {
@@ -50,6 +53,12 @@ export default function Servicos() {
 
   // BUSCA
   const [busca, setBusca] = useState("");
+
+  // ESTADOS DO COMPARTILHAMENTO
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [showCustomPeriodModal, setShowCustomPeriodModal] = useState(false);
+  const [shareInicio, setShareInicio] = useState(hoje);
+  const [shareFim, setShareFim] = useState(hoje);
 
   useEffect(() => {
     carregar();
@@ -165,6 +174,117 @@ export default function Servicos() {
     setReceberPeriodo(receber);
   };
 
+  // --- LÓGICA DE COMPARTILHAMENTO VIA WHATSAPP ---
+  const processarCompartilhamento = (dataInicio, dataFim, titulo) => {
+    const servicosFiltrados = lista.filter(
+      i => (!dataInicio || i.data >= dataInicio) && (!dataFim || i.data <= dataFim)
+    );
+
+    const gastosFiltrados = gastos.filter(
+      i => (!dataInicio || i.data >= dataInicio) && (!dataFim || i.data <= dataFim)
+    );
+
+    const totalBrutoServicos = servicosFiltrados.reduce((acc, cur) => acc + Number(cur.valor || 0), 0);
+    const totalGastosComp = gastosFiltrados.reduce((acc, cur) => acc + Number(cur.valor || 0), 0);
+    const liquidoComp = totalBrutoServicos / 2;
+    const receberComp = (totalBrutoServicos - totalGastosComp) / 2;
+
+    const formatarDataBR = (strData) => {
+      if (!strData) return "";
+      const [y, m, d] = strData.split("-");
+      return `${d}/${m}/${y}`;
+    };
+
+    let msg = `📊 *RESUMO FINANCEIRO - ${titulo.toUpperCase()}*\n`;
+    if (dataInicio && dataFim) {
+      msg += `📅 *Período:* ${formatarDataBR(dataInicio)} até ${formatarDataBR(dataFim)}\n\n`;
+    } else {
+      msg += `\n`;
+    }
+
+    msg += `💵 *Bruto Total:* R$ ${totalBrutoServicos.toFixed(2).replace(".", ",")}\n`;
+    msg += `📉 *Total de Gastos:* R$ ${totalGastosComp.toFixed(2).replace(".", ",")}\n`;
+    msg += `🔷 *Líquido:* R$ ${liquidoComp.toFixed(2).replace(".", ",")}\n`;
+    msg += `⭐ *A Receber:* R$ ${receberComp.toFixed(2).replace(".", ",")}\n\n`;
+
+    msg += `-----------------------------------\n`;
+    msg += `✂️ *SERVIÇOS PRESTADOS (${servicosFiltrados.length})*\n`;
+    if (servicosFiltrados.length === 0) {
+      msg += `_Nenhum serviço cadastrado no período._\n`;
+    } else {
+      servicosFiltrados.forEach((item) => {
+        msg += `• *${item.servico}* (${item.nome}) - R$ ${Number(item.valor).toFixed(2).replace(".", ",")} [${formatarDataBR(item.data)}]\n`;
+      });
+    }
+
+    msg += `\n💸 *GASTOS/DESPESAS (${gastosFiltrados.length})*\n`;
+    if (gastosFiltrados.length === 0) {
+      msg += `_Nenhum gasto cadastrado no período._\n`;
+    } else {
+      gastosFiltrados.forEach((gasto) => {
+        const desc = gasto.descricao || gasto.nome || gasto.gasto || "Gasto";
+        msg += `• *${desc}* - R$ ${Number(gasto.valor).toFixed(2).replace(".", ",")} [${formatarDataBR(gasto.data)}]\n`;
+      });
+    }
+
+    const encoded = encodeURIComponent(msg);
+    window.open(`https://api.whatsapp.com/send?text=${encoded}`, "_blank");
+
+    setShowShareModal(false);
+    setShowCustomPeriodModal(false);
+  };
+
+  const handleCompartilharHoje = () => {
+    processarCompartilhamento(hoje, hoje, "Dia Atual");
+  };
+
+  const handleCompartilharSemana = () => {
+    const hojeDate = new Date();
+    const diaSemana = hojeDate.getDay();
+    const dom = new Date(hojeDate);
+    dom.setDate(hojeDate.getDate() - diaSemana);
+    
+    const sab = new Date(dom);
+    sab.setDate(dom.getDate() + 6);
+
+    const domStr = dom.toISOString().split("T")[0];
+    const sabStr = sab.toISOString().split("T")[0];
+
+    processarCompartilhamento(domStr, sabStr, "Semana Atual");
+  };
+
+  const handleCompartilharQuinzena = () => {
+    const hojeObj = new Date();
+    const dia = hojeObj.getDate();
+    const y = hojeObj.getFullYear();
+    const m = String(hojeObj.getMonth() + 1).padStart(2, "0");
+
+    let dtInicio = "";
+    let dtFim = "";
+    let rotulo = "";
+
+    if (dia <= 15) {
+      dtInicio = `${y}-${m}-01`;
+      dtFim = `${y}-${m}-15`;
+      rotulo = "1ª Quinzena";
+    } else {
+      const ultimoDia = new Date(y, hojeObj.getMonth() + 1, 0).getDate();
+      dtInicio = `${y}-${m}-16`;
+      dtFim = `${y}-${m}-${ultimoDia}`;
+      rotulo = "2ª Quinzena";
+    }
+
+    processarCompartilhamento(dtInicio, dtFim, rotulo);
+  };
+
+  const handleCompartilharCustomizado = () => {
+    if (!shareInicio || !shareFim) {
+      alert("Selecione a data inicial e final.");
+      return;
+    }
+    processarCompartilhamento(shareInicio, shareFim, "Período Escolhido");
+  };
+
   const servicosPeriodoFiltrados = servicosPeriodo.filter(item =>
     item.servico.toLowerCase().includes(busca.toLowerCase()) ||
     item.nome.toLowerCase().includes(busca.toLowerCase()) ||
@@ -194,8 +314,17 @@ export default function Servicos() {
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12 text-slate-100 antialiased">
 
+      {/* BOTÃO COMPARTILHAR */}
+        <button
+          onClick={() => setShowShareModal(true)}
+          className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 shadow-lg shadow-emerald-950/30 transition active:scale-95 cursor-pointer self-start sm:self-auto"
+        >
+          <Share2 size={16} />
+          Compartilhar
+        </button>
+
       {/* HEADER DA PÁGINA */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-4 gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-100 tracking-tight flex items-center gap-2.5">
             <div className="p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400">
@@ -207,6 +336,8 @@ export default function Servicos() {
             Cadastre novos atendimentos e acompanhe suas finanças
           </p>
         </div>
+
+        
       </div>
 
       {/* FORMULÁRIO */}
@@ -235,7 +366,7 @@ export default function Servicos() {
           </div>
 
           <div>
-            <label className="text-xs font-medium text-slate-400 mb-1.5 block">Nome do Cliente</label>
+            <label className="text-xs font-medium text-slate-400 mb-1.5 block">Nome do Pet ou Cliente</label>
             <input
               className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 p-2.5 rounded-xl text-xs text-slate-200 placeholder-slate-500 outline-none transition"
               placeholder="Ex: Rex / Maria Silva"
@@ -477,6 +608,112 @@ export default function Servicos() {
         )}
 
       </div>
+
+      {/* MODAL DE COMPARTILHAMENTO */}
+      {showShareModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-5 space-y-4 relative shadow-2xl">
+            <button
+              onClick={() => {
+                setShowShareModal(false);
+                setShowCustomPeriodModal(false);
+              }}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400">
+                <Share2 size={18} />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-100">Compartilhar Relatório</h3>
+                <p className="text-[11px] text-slate-400">Envie o resumo diretamente via WhatsApp</p>
+              </div>
+            </div>
+
+            {!showCustomPeriodModal ? (
+              <div className="space-y-2 pt-1">
+                <button
+                  onClick={handleCompartilharHoje}
+                  className="w-full bg-slate-950 hover:bg-slate-800/80 border border-slate-800 p-3 rounded-xl text-xs font-medium text-slate-200 flex items-center justify-between transition group"
+                >
+                  <span>Dia Atual (Hoje)</span>
+                  <Send size={14} className="text-slate-500 group-hover:text-emerald-400 transition" />
+                </button>
+
+                <button
+                  onClick={handleCompartilharSemana}
+                  className="w-full bg-slate-950 hover:bg-slate-800/80 border border-slate-800 p-3 rounded-xl text-xs font-medium text-slate-200 flex items-center justify-between transition group"
+                >
+                  <span>Semana Atual</span>
+                  <Send size={14} className="text-slate-500 group-hover:text-emerald-400 transition" />
+                </button>
+
+                <button
+                  onClick={handleCompartilharQuinzena}
+                  className="w-full bg-slate-950 hover:bg-slate-800/80 border border-slate-800 p-3 rounded-xl text-xs font-medium text-slate-200 flex items-center justify-between transition group"
+                >
+                  <div className="text-left">
+                    <p>Quinzena Atual</p>
+                    <p className="text-[10px] text-slate-500">
+                      {new Date().getDate() <= 15 ? "1ª Quinzena (01 ao 15)" : "2ª Quinzena (16 ao Fim)"}
+                    </p>
+                  </div>
+                  <Send size={14} className="text-slate-500 group-hover:text-emerald-400 transition" />
+                </button>
+
+                <button
+                  onClick={() => setShowCustomPeriodModal(true)}
+                  className="w-full bg-slate-950 hover:bg-slate-800/80 border border-dashed border-slate-700 p-3 rounded-xl text-xs font-medium text-slate-300 flex items-center justify-between transition"
+                >
+                  <span>Escolher Período...</span>
+                  <Calendar size={14} className="text-slate-400" />
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3 pt-1">
+                <div>
+                  <label className="text-[10px] font-medium text-slate-400 mb-1 block">Data Inicial</label>
+                  <input
+                    type="date"
+                    value={shareInicio}
+                    onChange={(e) => setShareInicio(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 p-2 rounded-xl text-xs text-slate-200 outline-none focus:border-emerald-500/50"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-medium text-slate-400 mb-1 block">Data Final</label>
+                  <input
+                    type="date"
+                    value={shareFim}
+                    onChange={(e) => setShareFim(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 p-2 rounded-xl text-xs text-slate-200 outline-none focus:border-emerald-500/50"
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    onClick={() => setShowCustomPeriodModal(false)}
+                    className="w-1/2 bg-slate-950 border border-slate-800 hover:bg-slate-800 text-slate-300 text-xs py-2 rounded-xl font-medium transition"
+                  >
+                    Voltar
+                  </button>
+                  <button
+                    onClick={handleCompartilharCustomizado}
+                    className="w-1/2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs py-2 rounded-xl font-medium transition flex items-center justify-center gap-1.5"
+                  >
+                    <Send size={13} /> Enviar
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

@@ -611,7 +611,7 @@ export default function Servicos() {
 
       {/* MODAL DE COMPARTILHAMENTO */}
       {showShareModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start justify-center p-4 z-50">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-5 space-y-4 relative shadow-2xl">
             <button
               onClick={() => {

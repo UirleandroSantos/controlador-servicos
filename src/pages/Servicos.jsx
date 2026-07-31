@@ -195,6 +195,19 @@ export default function Servicos() {
       return `${d}/${m}/${y}`;
     };
 
+    // Helper para obter o dia da semana por extenso + data BR
+    const formatarCabecalhoDia = (strData) => {
+      if (!strData) return "";
+      const [y, m, d] = strData.split("-");
+      const dataObj = new Date(Number(y), Number(m) - 1, Number(d));
+      
+      let diaSemana = dataObj.toLocaleDateString("pt-BR", { weekday: "long" });
+      // Capitaliza a primeira letra do dia da semana
+      diaSemana = diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1);
+
+      return `${diaSemana} - ${d}/${m}/${y}`;
+    };
+
     let msg = `📊 *RESUMO FINANCEIRO - ${titulo.toUpperCase()}*\n`;
     if (dataInicio && dataFim) {
       msg += `📅 *Período:* ${formatarDataBR(dataInicio)} até ${formatarDataBR(dataFim)}\n\n`;
@@ -209,15 +222,31 @@ export default function Servicos() {
 
     msg += `-----------------------------------\n`;
     msg += `✂️ *SERVIÇOS PRESTADOS (${servicosFiltrados.length})*\n`;
+
     if (servicosFiltrados.length === 0) {
       msg += `_Nenhum serviço cadastrado no período._\n`;
     } else {
-      servicosFiltrados.forEach((item) => {
-        msg += `• *${item.servico}* (${item.nome}) - R$ ${Number(item.valor).toFixed(2).replace(".", ",")} [${formatarDataBR(item.data)}]\n`;
+      // 1. Agrupa os serviços pela data (ordem decrescente de data)
+      const servicosPorData = servicosFiltrados.reduce((acc, item) => {
+        if (!acc[item.data]) acc[item.data] = [];
+        acc[item.data].push(item);
+        return acc;
+      }, {});
+
+      // Ordena as datas (das mais recentes para as mais antigas)
+      const datasOrdenadas = Object.keys(servicosPorData).sort((a, b) => b.localeCompare(a));
+
+      // 2. Itera sobre cada grupo de data
+      datasOrdenadas.forEach((dataChave) => {
+        msg += `\n📅 *${formatarCabecalhoDia(dataChave)}*\n`;
+        servicosPorData[dataChave].forEach((item) => {
+          msg += `• *${item.servico}* (${item.nome}) - R$ ${Number(item.valor).toFixed(2).replace(".", ",")}\n`;
+        });
       });
     }
 
-    msg += `\n💸 *GASTOS/DESPESAS (${gastosFiltrados.length})*\n`;
+    msg += `\n-----------------------------------\n`;
+    msg += `💸 *GASTOS/DESPESAS (${gastosFiltrados.length})*\n`;
     if (gastosFiltrados.length === 0) {
       msg += `_Nenhum gasto cadastrado no período._\n`;
     } else {

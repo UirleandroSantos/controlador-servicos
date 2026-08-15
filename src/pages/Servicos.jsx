@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { supabase } from "../../services/supabase";
 import { 
   Pencil, 
@@ -7,7 +7,6 @@ import {
   Calendar, 
   Search, 
   Scissors, 
-  DollarSign, 
   Eye, 
   EyeOff, 
   CheckCircle2,
@@ -19,12 +18,18 @@ import {
 
 export default function Servicos() {
   const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado"));
-  if (!usuarioLogado) return null;
 
-  const hoje = new Date().toISOString().split("T")[0];
-  const ano = new Date().getFullYear();
-  const mes = String(new Date().getMonth() + 1).padStart(2, "0");
-  const primeiroDiaDoMes = `${ano}-${mes}-01`;
+  // Memoriza as datas padrão para não recriar a cada render
+  const { hoje, primeiroDiaDoMes } = useMemo(() => {
+    const dataAtual = new Date();
+    const hojeStr = dataAtual.toISOString().split("T")[0];
+    const ano = dataAtual.getFullYear();
+    const mes = String(dataAtual.getMonth() + 1).padStart(2, "0");
+    return {
+      hoje: hojeStr,
+      primeiroDiaDoMes: `${ano}-${mes}-01`
+    };
+  }, []);
 
   const [servico, setServico] = useState("");
   const [nome, setNome] = useState("");
@@ -38,14 +43,13 @@ export default function Servicos() {
   const [mostrarLista, setMostrarLista] = useState(false);
   const [editandoId, setEditandoId] = useState(null);
 
-  // ALTERAÇÃO AQUI
   const [inicio, setInicio] = useState(primeiroDiaDoMes);
   const [fim, setFim] = useState(hoje);
 
   const [subtotalPeriodo, setSubtotalPeriodo] = useState(0);
   const [servicosPeriodo, setServicosPeriodo] = useState([]);
 
-  // NOVOS STATES PARA OS CARDS DO PERÍODO
+  // CARDS DO PERÍODO
   const [brutoPeriodo, setBrutoPeriodo] = useState(0);
   const [liquidoPeriodo, setLiquidoPeriodo] = useState(0);
   const [gastosPeriodo, setGastosPeriodo] = useState(0);
@@ -61,34 +65,46 @@ export default function Servicos() {
   const [shareFim, setShareFim] = useState(hoje);
 
   useEffect(() => {
-    carregar();
-    carregarGastos();
+    if (usuarioLogado?.id) {
+      carregar();
+      carregarGastos();
+    }
   }, []);
 
-  // GARANTE PADRÃO SEMPRE QUE CARREGAR
-  useEffect(() => {
-    setInicio(primeiroDiaDoMes);
-    setFim(hoje);
-  }, [primeiroDiaDoMes, hoje]);
-
   const carregar = async () => {
-    const { data } = await supabase
+    if (!usuarioLogado?.id) return;
+
+    const { data, error } = await supabase
       .from("servicos")
       .select("*")
-      .eq("usuario_id", usuarioLogado.id)
+      .eq("usuario_id", Number(usuarioLogado.id))
       .order("data", { ascending: false });
+
+    if (error) {
+      console.error("Erro ao carregar serviços:", error);
+      return;
+    }
 
     setLista(data || []);
   };
 
   const carregarGastos = async () => {
-    const { data } = await supabase
+    if (!usuarioLogado?.id) return;
+
+    const { data, error } = await supabase
       .from("gastos")
       .select("*")
-      .eq("usuario_id", usuarioLogado.id);
+      .eq("usuario_id", Number(usuarioLogado.id));
+
+    if (error) {
+      console.error("Erro ao carregar gastos:", error);
+      return;
+    }
 
     setGastos(data || []);
   };
+
+  if (!usuarioLogado) return null;
 
   const limparFormulario = () => {
     setServico("");
@@ -100,7 +116,7 @@ export default function Servicos() {
 
   const salvar = async () => {
     if (!servico || !nome || !valor) {
-      alert("Preencha tudo");
+      alert("Preencha todos os campos obrigatórios");
       return;
     }
 
@@ -118,7 +134,7 @@ export default function Servicos() {
     } else {
       await supabase.from("servicos").insert([
         {
-          usuario_id: usuarioLogado.id,
+          usuario_id: Number(usuarioLogado.id),
           servico,
           nome,
           valor: Number(valor),
@@ -159,22 +175,21 @@ export default function Servicos() {
       i => (!inicio || i.data >= inicio) && (!fim || i.data <= fim)
     );
 
-    const bruto = filtrados.reduce((s, i) => s + i.valor, 0);
-    const gastosTotal = gastosFiltrados.reduce((s, i) => s + i.valor, 0);
+    const bruto = filtrados.reduce((s, i) => s + Number(i.valor || 0), 0);
+    const gastosTotal = gastosFiltrados.reduce((s, i) => s + Number(i.valor || 0), 0);
     const liquido = bruto / 2;
     const receber = (bruto - gastosTotal) / 2;
 
     setSubtotalPeriodo(bruto);
     setServicosPeriodo(filtrados);
 
-    // SET DOS CARDS
     setBrutoPeriodo(bruto);
     setLiquidoPeriodo(liquido);
     setGastosPeriodo(gastosTotal);
     setReceberPeriodo(receber);
   };
 
-  // --- LÓGICA DE COMPARTILHAMENTO VIA WHATSAPP ---
+  // --- COMPARTILHAMENTO VIA WHATSAPP ---
   const processarCompartilhamento = (dataInicio, dataFim, titulo) => {
     const servicosFiltrados = lista.filter(
       i => (!dataInicio || i.data >= dataInicio) && (!dataFim || i.data <= dataFim)
@@ -195,16 +210,12 @@ export default function Servicos() {
       return `${d}/${m}/${y}`;
     };
 
-    // Helper para obter o dia da semana por extenso + data BR
     const formatarCabecalhoDia = (strData) => {
       if (!strData) return "";
       const [y, m, d] = strData.split("-");
       const dataObj = new Date(Number(y), Number(m) - 1, Number(d));
-      
       let diaSemana = dataObj.toLocaleDateString("pt-BR", { weekday: "long" });
-      // Capitaliza a primeira letra do dia da semana
       diaSemana = diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1);
-
       return `${diaSemana} - ${d}/${m}/${y}`;
     };
 
@@ -226,17 +237,14 @@ export default function Servicos() {
     if (servicosFiltrados.length === 0) {
       msg += `_Nenhum serviço cadastrado no período._\n`;
     } else {
-      // 1. Agrupa os serviços pela data (ordem decrescente de data)
       const servicosPorData = servicosFiltrados.reduce((acc, item) => {
         if (!acc[item.data]) acc[item.data] = [];
         acc[item.data].push(item);
         return acc;
       }, {});
 
-      // Ordena as datas (das mais recentes para as mais antigas)
       const datasOrdenadas = Object.keys(servicosPorData).sort((a, b) => b.localeCompare(a));
 
-      // 2. Itera sobre cada grupo de data
       datasOrdenadas.forEach((dataChave) => {
         msg += `\n📅 *${formatarCabecalhoDia(dataChave)}*\n`;
         servicosPorData[dataChave].forEach((item) => {
@@ -315,8 +323,8 @@ export default function Servicos() {
   };
 
   const servicosPeriodoFiltrados = servicosPeriodo.filter(item =>
-    item.servico.toLowerCase().includes(busca.toLowerCase()) ||
-    item.nome.toLowerCase().includes(busca.toLowerCase()) ||
+    item.servico?.toLowerCase().includes(busca.toLowerCase()) ||
+    item.nome?.toLowerCase().includes(busca.toLowerCase()) ||
     (item.obs || "").toLowerCase().includes(busca.toLowerCase())
   );
 
@@ -325,32 +333,31 @@ export default function Servicos() {
   );
 
   const servicosFiltrados = servicosDoMes.filter(item =>
-    item.servico.toLowerCase().includes(busca.toLowerCase()) ||
-    item.nome.toLowerCase().includes(busca.toLowerCase()) ||
+    item.servico?.toLowerCase().includes(busca.toLowerCase()) ||
+    item.nome?.toLowerCase().includes(busca.toLowerCase()) ||
     (item.obs || "").toLowerCase().includes(busca.toLowerCase())
   );
 
-  const totalBruto = servicosDoMes.reduce((s, i) => s + i.valor, 0);
+  const totalBruto = servicosDoMes.reduce((s, i) => s + Number(i.valor || 0), 0);
   const totalLiquido = totalBruto / 2;
 
   const gastosDoMes = gastos.filter(
     i => i.data >= primeiroDiaDoMes && i.data <= hoje
   );
 
-  const totalGastos = gastosDoMes.reduce((s, i) => s + i.valor, 0);
+  const totalGastos = gastosDoMes.reduce((s, i) => s + Number(i.valor || 0), 0);
   const totalReceber = (totalBruto - totalGastos) / 2;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12 text-slate-100 antialiased">
-
       {/* BOTÃO COMPARTILHAR */}
-        <button
-          onClick={() => setShowShareModal(true)}
-          className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 shadow-lg shadow-emerald-950/30 transition active:scale-95 cursor-pointer self-start sm:self-auto"
-        >
-          <Share2 size={16} />
-          Compartilhar
-        </button>
+      <button
+        onClick={() => setShowShareModal(true)}
+        className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 shadow-lg shadow-emerald-950/30 transition active:scale-95 cursor-pointer self-start sm:self-auto"
+      >
+        <Share2 size={16} />
+        Compartilhar
+      </button>
 
       {/* HEADER DA PÁGINA */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-4 gap-3">
@@ -365,8 +372,6 @@ export default function Servicos() {
             Cadastre novos atendimentos e acompanhe suas finanças
           </p>
         </div>
-
-        
       </div>
 
       {/* FORMULÁRIO */}
@@ -470,8 +475,6 @@ export default function Servicos() {
       {/* LISTA DO MÊS */}
       {mostrarLista && (
         <div className="space-y-4 animate-in fade-in duration-200">
-
-          {/* CARDS RESUMO DO MÊS */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Card titulo="Bruto" valor={totalBruto} cor="text-emerald-400" bg="bg-emerald-500/10 border-emerald-500/20" />
             <Card titulo="Líquido" valor={totalLiquido} cor="text-sky-400" bg="bg-sky-500/10 border-sky-500/20" />
@@ -479,7 +482,6 @@ export default function Servicos() {
             <Card titulo="A Receber" valor={totalReceber} cor="text-purple-400" bg="bg-purple-500/10 border-purple-500/20" />
           </div>
 
-          {/* LISTA E BUSCA */}
           <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-2xl space-y-3">
             <div className="relative">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
@@ -511,7 +513,7 @@ export default function Servicos() {
                       <span>{item.data}</span>
                       <span>•</span>
                       <span className="text-emerald-400 font-semibold font-mono">
-                        R$ {item.valor.toFixed(2).replace(".",",")}
+                        R$ {Number(item.valor || 0).toFixed(2).replace(".",",")}
                       </span>
                     </p>
                     {item.obs && (
@@ -546,11 +548,10 @@ export default function Servicos() {
               )}
             </div>
           </div>
-
         </div>
       )}
 
-      {/* SEÇÃO DE CONSULTA POR PERÍODO */}
+      {/* CONSULTA POR PERÍODO */}
       <div className="bg-slate-900/80 border border-slate-800/80 p-5 rounded-2xl space-y-4">
         <div className="flex items-center gap-2">
           <Filter size={16} className="text-indigo-400" />
@@ -578,17 +579,6 @@ export default function Servicos() {
           </div>
         </div>
 
-        <div className="relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-          <input
-            type="text"
-            placeholder="Filtrar resultados da busca..."
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-800 pl-8 pr-3 py-2 rounded-xl text-xs text-slate-200 placeholder-slate-500 outline-none focus:border-indigo-500/50 transition"
-          />
-        </div>
-
         <button
           onClick={calcularPeriodo}
           className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2 rounded-xl text-xs transition shadow-lg shadow-indigo-950/20 active:scale-[0.99]"
@@ -596,7 +586,6 @@ export default function Servicos() {
           Calcular Período
         </button>
 
-        {/* CARDS DO PERÍODO */}
         {servicosPeriodo.length > 0 && (
           <div className="space-y-4 pt-2">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
@@ -628,20 +617,19 @@ export default function Servicos() {
                     </p>
                   </div>
                   <p className="text-xs text-emerald-400 font-bold font-mono">
-                    R$ {item.valor.toFixed(2).replace(".",",")}
+                    R$ {Number(item.valor || 0).toFixed(2).replace(".",",")}
                   </p>
                 </div>
               ))}
             </div>
           </div>
         )}
-
       </div>
 
       {/* MODAL DE COMPARTILHAMENTO */}
       {showShareModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start justify-center p-4 z-50">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-5 space-y-4 relative shadow-2xl">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-5 space-y-4 relative shadow-2xl mt-12">
             <button
               onClick={() => {
                 setShowShareModal(false);
@@ -742,18 +730,16 @@ export default function Servicos() {
           </div>
         </div>
       )}
-
     </div>
   );
 }
 
-/* COMPONENTE CARD MELHORADO */
 function Card({ titulo, valor, cor, bg }) {
   return (
     <div className={`border p-3 rounded-xl text-center flex flex-col justify-between ${bg}`}>
       <p className="text-slate-400 text-[11px] font-medium mb-1">{titulo}</p>
       <h2 className={`text-sm font-extrabold font-mono ${cor}`}>
-        R$ {valor.toFixed(2).replace(".",",")}
+        R$ {Number(valor || 0).toFixed(2).replace(".",",")}
       </h2>
     </div>
   );

@@ -30,7 +30,6 @@ export default function Login({ setUsuarioLogado }) {
 
     const user = data[0];
 
-    // Garante a comparação como String pura
     if (String(user.senha) !== String(senha)) {
       alert("Senha incorreta");
       return;
@@ -56,29 +55,35 @@ export default function Login({ setUsuarioLogado }) {
 
     setCarregando(true);
 
+    // Garantindo que o ID seja enviado corretamente como número inteiro
+    const idUsuario = parseInt(usuarioTemp.id, 10);
+
     const { data, error } = await supabase
       .from("usuarios")
       .update({
         senha: String(novaSenha),
         primeiro_login: false
       })
-      .eq("id", Number(usuarioTemp.id))
+      .eq("id", idUsuario)
       .select();
 
     setCarregando(false);
 
     if (error) {
-      console.error("Erro Supabase:", error);
-      alert("Erro ao atualizar senha no banco: " + error.message);
+      alert("Erro do Supabase: " + error.message);
+      console.error("Erro completo:", error);
       return;
     }
 
+    // Se nenhuma linha foi alterada no banco
     if (!data || data.length === 0) {
-      alert("Não foi possível atualizar o registro no banco. Verifique permissões RLS.");
+      alert("O Supabase recusou a alteração. Verifique as permissões de UPDATE no painel do Supabase (RLS).");
       return;
     }
 
     const atualizado = data[0];
+
+    alert("Senha alterada com sucesso!");
 
     if (manterConectado) {
       localStorage.setItem("usuarioLogado", JSON.stringify(atualizado));
@@ -149,7 +154,7 @@ export default function Login({ setUsuarioLogado }) {
               type="password"
               maxLength={4}
               inputMode="numeric"
-              className="w-full bg-white/10 border border-white/20 text-white placeholder-gray-300 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono tracking-widest text-center"
+              className="w-full bg-white/10 border border-white/20 text-white placeholder-gray-300 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono tracking-widest text-center text-lg"
               placeholder="Nova senha (4 dígitos)"
               value={novaSenha}
               onChange={e => setNovaSenha(e.target.value)}

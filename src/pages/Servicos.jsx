@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { supabase } from "../../services/supabase";
 import { 
   Pencil, 
@@ -17,16 +17,25 @@ import {
 } from "lucide-react";
 
 export default function Servicos() {
-  const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado"));
+  const usuarioLogado = useMemo(() => {
+    try {
+      const item = localStorage.getItem("usuarioLogado");
+      return item ? JSON.parse(item) : null;
+    } catch {
+      return null;
+    }
+  }, []);
 
-  // Memoriza as datas padrão para não recriar a cada render
+  const userId = usuarioLogado?.id ? Number(usuarioLogado.id) : null;
+
   const { hoje, primeiroDiaDoMes } = useMemo(() => {
     const dataAtual = new Date();
-    const hojeStr = dataAtual.toISOString().split("T")[0];
     const ano = dataAtual.getFullYear();
     const mes = String(dataAtual.getMonth() + 1).padStart(2, "0");
+    const dia = String(dataAtual.getDate()).padStart(2, "0");
+    
     return {
-      hoje: hojeStr,
+      hoje: `${ano}-${mes}-${dia}`,
       primeiroDiaDoMes: `${ano}-${mes}-01`
     };
   }, []);
@@ -40,7 +49,7 @@ export default function Servicos() {
   const [lista, setLista] = useState([]);
   const [gastos, setGastos] = useState([]);
 
-  const [mostrarLista, setMostrarLista] = useState(false);
+  const [mostrarLista, setMostrarLista] = useState(true);
   const [editandoId, setEditandoId] = useState(null);
 
   const [inicio, setInicio] = useState(primeiroDiaDoMes);
@@ -49,35 +58,25 @@ export default function Servicos() {
   const [subtotalPeriodo, setSubtotalPeriodo] = useState(0);
   const [servicosPeriodo, setServicosPeriodo] = useState([]);
 
-  // CARDS DO PERÍODO
   const [brutoPeriodo, setBrutoPeriodo] = useState(0);
   const [liquidoPeriodo, setLiquidoPeriodo] = useState(0);
   const [gastosPeriodo, setGastosPeriodo] = useState(0);
   const [receberPeriodo, setReceberPeriodo] = useState(0);
 
-  // BUSCA
   const [busca, setBusca] = useState("");
 
-  // ESTADOS DO COMPARTILHAMENTO
   const [showShareModal, setShowShareModal] = useState(false);
   const [showCustomPeriodModal, setShowCustomPeriodModal] = useState(false);
   const [shareInicio, setShareInicio] = useState(hoje);
   const [shareFim, setShareFim] = useState(hoje);
 
-  useEffect(() => {
-    if (usuarioLogado?.id) {
-      carregar();
-      carregarGastos();
-    }
-  }, []);
+  const carregar = useCallback(async () => {
+    if (!userId) return;
 
-  const carregar = async () => {
-    if (!usuarioLogado?.id) return;
-
-    const { data, error } = await supabase
+    const { data: dados, error } = await supabase
       .from("servicos")
       .select("*")
-      .eq("usuario_id", Number(usuarioLogado.id))
+      .eq("usuario_id", userId)
       .order("data", { ascending: false });
 
     if (error) {
@@ -85,26 +84,39 @@ export default function Servicos() {
       return;
     }
 
-    setLista(data || []);
-  };
+    setLista(dados || []);
+  }, [userId]);
 
-  const carregarGastos = async () => {
-    if (!usuarioLogado?.id) return;
+  const carregarGastos = useCallback(async () => {
+    if (!userId) return;
 
-    const { data, error } = await supabase
+    const { data: dados, error } = await supabase
       .from("gastos")
       .select("*")
-      .eq("usuario_id", Number(usuarioLogado.id));
+      .eq("usuario_id", userId);
 
     if (error) {
       console.error("Erro ao carregar gastos:", error);
       return;
     }
 
-    setGastos(data || []);
-  };
+    setGastos(dados || []);
+  }, [userId]);
 
-  if (!usuarioLogado) return null;
+  useEffect(() => {
+    if (userId) {
+      carregar();
+      carregarGastos();
+    }
+  }, [userId, carregar, carregarGastos]);
+
+  if (!usuarioLogado) {
+    return (
+      <div className="p-8 text-center text-slate-400">
+        Nenhum usuário logado encontrado.
+      </div>
+    );
+  }
 
   const limparFormulario = () => {
     setServico("");
@@ -120,28 +132,32 @@ export default function Servicos() {
       return;
     }
 
+    const payload = {
+      usuario_id: userId,
+      servico,
+      nome,
+      valor: Number(valor),
+      obs,
+      data
+    };
+
     if (editandoId) {
-      await supabase
+      const { error } = await supabase
         .from("servicos")
-        .update({
-          servico,
-          nome,
-          valor: Number(valor),
-          obs,
-          data
-        })
+        .update(payload)
         .eq("id", editandoId);
+
+      if (error) {
+        alert("Erro ao atualizar: " + error.message);
+        return;
+      }
     } else {
-      await supabase.from("servicos").insert([
-        {
-          usuario_id: Number(usuarioLogado.id),
-          servico,
-          nome,
-          valor: Number(valor),
-          obs,
-          data
-        }
-      ]);
+      const { error } = await supabase.from("servicos").insert([payload]);
+
+      if (error) {
+        alert("Erro ao salvar: " + error.message);
+        return;
+      }
     }
 
     setEditandoId(null);
@@ -152,7 +168,11 @@ export default function Servicos() {
   const excluir = async (id) => {
     if (!window.confirm("Deseja excluir este serviço?")) return;
 
-    await supabase.from("servicos").delete().eq("id", id);
+    const { error } = await supabase.from("servicos").delete().eq("id", id);
+    if (error) {
+      alert("Erro ao excluir: " + error.message);
+      return;
+    }
     carregar();
   };
 
@@ -189,7 +209,6 @@ export default function Servicos() {
     setReceberPeriodo(receber);
   };
 
-  // --- COMPARTILHAMENTO VIA WHATSAPP ---
   const processarCompartilhamento = (dataInicio, dataFim, titulo) => {
     const servicosFiltrados = lista.filter(
       i => (!dataInicio || i.data >= dataInicio) && (!dataFim || i.data <= dataFim)
@@ -259,7 +278,7 @@ export default function Servicos() {
       msg += `_Nenhum gasto cadastrado no período._\n`;
     } else {
       gastosFiltrados.forEach((gasto) => {
-        const desc = gasto.descricao || gasto.nome || gasto.gasto || "Gasto";
+        const desc = gasto.descricao || gasto.nome || gasto.gasto || "Gasto sem descrição";
         msg += `• *${desc}* - R$ ${Number(gasto.valor).toFixed(2).replace(".", ",")} [${formatarDataBR(gasto.data)}]\n`;
       });
     }
@@ -271,86 +290,37 @@ export default function Servicos() {
     setShowCustomPeriodModal(false);
   };
 
-  const handleCompartilharHoje = () => {
-    processarCompartilhamento(hoje, hoje, "Dia Atual");
-  };
-
-  const handleCompartilharSemana = () => {
-    const hojeDate = new Date();
-    const diaSemana = hojeDate.getDay();
-    const dom = new Date(hojeDate);
-    dom.setDate(hojeDate.getDate() - diaSemana);
-    
-    const sab = new Date(dom);
-    sab.setDate(dom.getDate() + 6);
-
-    const domStr = dom.toISOString().split("T")[0];
-    const sabStr = sab.toISOString().split("T")[0];
-
-    processarCompartilhamento(domStr, sabStr, "Semana Atual");
-  };
-
-  const handleCompartilharQuinzena = () => {
-    const hojeObj = new Date();
-    const dia = hojeObj.getDate();
-    const y = hojeObj.getFullYear();
-    const m = String(hojeObj.getMonth() + 1).padStart(2, "0");
-
-    let dtInicio = "";
-    let dtFim = "";
-    let rotulo = "";
-
-    if (dia <= 15) {
-      dtInicio = `${y}-${m}-01`;
-      dtFim = `${y}-${m}-15`;
-      rotulo = "1ª Quinzena";
-    } else {
-      const ultimoDia = new Date(y, hojeObj.getMonth() + 1, 0).getDate();
-      dtInicio = `${y}-${m}-16`;
-      dtFim = `${y}-${m}-${ultimoDia}`;
-      rotulo = "2ª Quinzena";
-    }
-
-    processarCompartilhamento(dtInicio, dtFim, rotulo);
-  };
-
-  const handleCompartilharCustomizado = () => {
-    if (!shareInicio || !shareFim) {
-      alert("Selecione a data inicial e final.");
-      return;
-    }
-    processarCompartilhamento(shareInicio, shareFim, "Período Escolhido");
-  };
-
   const servicosPeriodoFiltrados = servicosPeriodo.filter(item =>
     item.servico?.toLowerCase().includes(busca.toLowerCase()) ||
     item.nome?.toLowerCase().includes(busca.toLowerCase()) ||
     (item.obs || "").toLowerCase().includes(busca.toLowerCase())
   );
 
-  const servicosDoMes = lista.filter(
-    i => i.data >= primeiroDiaDoMes && i.data <= hoje
-  );
+  const servicosDoMesAtual = useMemo(() => {
+    return lista.filter(
+      (item) => (!primeiroDiaDoMes || item.data >= primeiroDiaDoMes) && (!hoje || item.data <= hoje)
+    );
+  }, [lista, primeiroDiaDoMes, hoje]);
 
-  const servicosFiltrados = servicosDoMes.filter(item =>
+  const gastosDoMesAtual = useMemo(() => {
+    return gastos.filter(
+      (item) => (!primeiroDiaDoMes || item.data >= primeiroDiaDoMes) && (!hoje || item.data <= hoje)
+    );
+  }, [gastos, primeiroDiaDoMes, hoje]);
+
+  const servicosFiltrados = servicosDoMesAtual.filter(item =>
     item.servico?.toLowerCase().includes(busca.toLowerCase()) ||
     item.nome?.toLowerCase().includes(busca.toLowerCase()) ||
     (item.obs || "").toLowerCase().includes(busca.toLowerCase())
   );
 
-  const totalBruto = servicosDoMes.reduce((s, i) => s + Number(i.valor || 0), 0);
+  const totalBruto = servicosDoMesAtual.reduce((s, i) => s + Number(i.valor || 0), 0);
   const totalLiquido = totalBruto / 2;
-
-  const gastosDoMes = gastos.filter(
-    i => i.data >= primeiroDiaDoMes && i.data <= hoje
-  );
-
-  const totalGastos = gastosDoMes.reduce((s, i) => s + Number(i.valor || 0), 0);
+  const totalGastos = gastosDoMesAtual.reduce((s, i) => s + Number(i.valor || 0), 0);
   const totalReceber = (totalBruto - totalGastos) / 2;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12 text-slate-100 antialiased">
-      {/* BOTÃO COMPARTILHAR */}
       <button
         onClick={() => setShowShareModal(true)}
         className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 shadow-lg shadow-emerald-950/30 transition active:scale-95 cursor-pointer self-start sm:self-auto"
@@ -359,7 +329,6 @@ export default function Servicos() {
         Compartilhar
       </button>
 
-      {/* HEADER DA PÁGINA */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-4 gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-100 tracking-tight flex items-center gap-2.5">
@@ -374,7 +343,6 @@ export default function Servicos() {
         </div>
       </div>
 
-      {/* FORMULÁRIO */}
       <div className="bg-slate-900/80 backdrop-blur-md border border-slate-800/80 p-5 md:p-6 rounded-2xl shadow-xl space-y-4">
         <div className="flex items-center gap-2 mb-2">
           <PlusCircle size={18} className="text-emerald-400" />
@@ -447,18 +415,17 @@ export default function Servicos() {
 
         <button
           onClick={salvar}
-          className="w-full bg-emerald-600 hover:bg-emerald-500 font-medium text-white py-2.5 rounded-xl transition shadow-lg shadow-emerald-950/20 text-xs active:scale-[0.99] flex items-center justify-center gap-2"
+          className="w-full bg-emerald-600 hover:bg-emerald-500 font-medium text-white py-2.5 rounded-xl transition shadow-lg shadow-emerald-950/20 text-xs active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
         >
           <CheckCircle2 size={16} />
           {editandoId ? "Atualizar Serviço" : "Salvar Serviço"}
         </button>
       </div>
 
-      {/* BOTÃO ALTERNAR VISUALIZAÇÃO */}
       <div className="flex justify-end">
         <button
           onClick={() => setMostrarLista(!mostrarLista)}
-          className="bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white px-4 py-2 rounded-xl text-xs font-medium transition flex items-center gap-2 active:scale-95 shadow-sm"
+          className="bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white px-4 py-2 rounded-xl text-xs font-medium transition flex items-center gap-2 active:scale-95 shadow-sm cursor-pointer"
         >
           {mostrarLista ? (
             <>
@@ -466,13 +433,12 @@ export default function Servicos() {
             </>
           ) : (
             <>
-              <Eye size={15} className="text-emerald-400" /> Ver Trabalhos do Mês
+              <Eye size={15} className="text-emerald-400" /> Ver Serviços do Mês
             </>
           )}
         </button>
       </div>
 
-      {/* LISTA DO MÊS */}
       {mostrarLista && (
         <div className="space-y-4 animate-in fade-in duration-200">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -524,7 +490,7 @@ export default function Servicos() {
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => editar(item)}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition"
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition cursor-pointer"
                       title="Editar"
                     >
                       <Pencil size={15} />
@@ -532,7 +498,7 @@ export default function Servicos() {
 
                     <button
                       onClick={() => excluir(item.id)}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition"
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
                       title="Excluir"
                     >
                       <Trash size={15} />
@@ -543,7 +509,7 @@ export default function Servicos() {
 
               {servicosFiltrados.length === 0 && (
                 <div className="text-center py-6">
-                  <p className="text-xs text-slate-500">Nenhum serviço encontrado no período.</p>
+                  <p className="text-xs text-slate-500">Nenhum serviço encontrado neste mês.</p>
                 </div>
               )}
             </div>
@@ -551,7 +517,6 @@ export default function Servicos() {
         </div>
       )}
 
-      {/* CONSULTA POR PERÍODO */}
       <div className="bg-slate-900/80 border border-slate-800/80 p-5 rounded-2xl space-y-4">
         <div className="flex items-center gap-2">
           <Filter size={16} className="text-indigo-400" />
@@ -581,7 +546,7 @@ export default function Servicos() {
 
         <button
           onClick={calcularPeriodo}
-          className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2 rounded-xl text-xs transition shadow-lg shadow-indigo-950/20 active:scale-[0.99]"
+          className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2 rounded-xl text-xs transition shadow-lg shadow-indigo-950/20 active:scale-[0.99] cursor-pointer"
         >
           Calcular Período
         </button>
@@ -626,7 +591,6 @@ export default function Servicos() {
         )}
       </div>
 
-      {/* MODAL DE COMPARTILHAMENTO */}
       {showShareModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start justify-center p-4 z-50">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-5 space-y-4 relative shadow-2xl mt-12">
@@ -635,7 +599,7 @@ export default function Servicos() {
                 setShowShareModal(false);
                 setShowCustomPeriodModal(false);
               }}
-              className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition"
+              className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition cursor-pointer"
             >
               <X size={18} />
             </button>
@@ -653,37 +617,24 @@ export default function Servicos() {
             {!showCustomPeriodModal ? (
               <div className="space-y-2 pt-1">
                 <button
-                  onClick={handleCompartilharHoje}
-                  className="w-full bg-slate-950 hover:bg-slate-800/80 border border-slate-800 p-3 rounded-xl text-xs font-medium text-slate-200 flex items-center justify-between transition group"
+                  onClick={() => processarCompartilhamento(hoje, hoje, "Dia Atual")}
+                  className="w-full bg-slate-950 hover:bg-slate-800/80 border border-slate-800 p-3 rounded-xl text-xs font-medium text-slate-200 flex items-center justify-between transition group cursor-pointer"
                 >
                   <span>Dia Atual (Hoje)</span>
                   <Send size={14} className="text-slate-500 group-hover:text-emerald-400 transition" />
                 </button>
 
                 <button
-                  onClick={handleCompartilharSemana}
-                  className="w-full bg-slate-950 hover:bg-slate-800/80 border border-slate-800 p-3 rounded-xl text-xs font-medium text-slate-200 flex items-center justify-between transition group"
+                  onClick={() => processarCompartilhamento(primeiroDiaDoMes, hoje, "Mês Atual")}
+                  className="w-full bg-slate-950 hover:bg-slate-800/80 border border-slate-800 p-3 rounded-xl text-xs font-medium text-slate-200 flex items-center justify-between transition group cursor-pointer"
                 >
-                  <span>Semana Atual</span>
-                  <Send size={14} className="text-slate-500 group-hover:text-emerald-400 transition" />
-                </button>
-
-                <button
-                  onClick={handleCompartilharQuinzena}
-                  className="w-full bg-slate-950 hover:bg-slate-800/80 border border-slate-800 p-3 rounded-xl text-xs font-medium text-slate-200 flex items-center justify-between transition group"
-                >
-                  <div className="text-left">
-                    <p>Quinzena Atual</p>
-                    <p className="text-[10px] text-slate-500">
-                      {new Date().getDate() <= 15 ? "1ª Quinzena (01 ao 15)" : "2ª Quinzena (16 ao Fim)"}
-                    </p>
-                  </div>
+                  <span>Mês Atual (01 até Hoje)</span>
                   <Send size={14} className="text-slate-500 group-hover:text-emerald-400 transition" />
                 </button>
 
                 <button
                   onClick={() => setShowCustomPeriodModal(true)}
-                  className="w-full bg-slate-950 hover:bg-slate-800/80 border border-dashed border-slate-700 p-3 rounded-xl text-xs font-medium text-slate-300 flex items-center justify-between transition"
+                  className="w-full bg-slate-950 hover:bg-slate-800/80 border border-dashed border-slate-700 p-3 rounded-xl text-xs font-medium text-slate-300 flex items-center justify-between transition cursor-pointer"
                 >
                   <span>Escolher Período...</span>
                   <Calendar size={14} className="text-slate-400" />
@@ -714,13 +665,13 @@ export default function Servicos() {
                 <div className="flex gap-2 pt-2">
                   <button
                     onClick={() => setShowCustomPeriodModal(false)}
-                    className="w-1/2 bg-slate-950 border border-slate-800 hover:bg-slate-800 text-slate-300 text-xs py-2 rounded-xl font-medium transition"
+                    className="w-1/2 bg-slate-950 border border-slate-800 hover:bg-slate-800 text-slate-300 text-xs py-2 rounded-xl font-medium transition cursor-pointer"
                   >
                     Voltar
                   </button>
                   <button
-                    onClick={handleCompartilharCustomizado}
-                    className="w-1/2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs py-2 rounded-xl font-medium transition flex items-center justify-center gap-1.5"
+                    onClick={() => processarCompartilhamento(shareInicio, shareFim, "Período Escolhido")}
+                    className="w-1/2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs py-2 rounded-xl font-medium transition flex items-center justify-center gap-1.5 cursor-pointer"
                   >
                     <Send size={13} /> Enviar
                   </button>

@@ -7,12 +7,21 @@ export default function Login({ setUsuarioLogado }) {
   const [novaSenha, setNovaSenha] = useState("");
   const [usuarioTemp, setUsuarioTemp] = useState(null);
   const [manterConectado, setManterConectado] = useState(true);
+  const [carregando, setCarregando] = useState(false);
 
   const entrar = async () => {
+    if (!usuario || !senha) {
+      alert("Preencha o usuário e a senha.");
+      return;
+    }
+
+    setCarregando(true);
     const { data, error } = await supabase
       .from("usuarios")
       .select("*")
-      .eq("usuario", usuario.toLowerCase());
+      .eq("usuario", usuario.trim().toLowerCase());
+
+    setCarregando(false);
 
     if (error || !data || data.length === 0) {
       alert("Usuário não encontrado");
@@ -21,7 +30,8 @@ export default function Login({ setUsuarioLogado }) {
 
     const user = data[0];
 
-    if (user.senha !== senha) {
+    // Garante a comparação como String pura
+    if (String(user.senha) !== String(senha)) {
       alert("Senha incorreta");
       return;
     }
@@ -40,38 +50,46 @@ export default function Login({ setUsuarioLogado }) {
 
   const definirNovaSenha = async () => {
     if (!/^\d{4}$/.test(novaSenha)) {
-      alert("A senha deve ter 4 dígitos");
+      alert("A senha deve ter exatamente 4 dígitos numéricos");
       return;
     }
 
-    const { error } = await supabase
+    setCarregando(true);
+
+    const { data, error } = await supabase
       .from("usuarios")
       .update({
-        senha: novaSenha,
+        senha: String(novaSenha),
         primeiro_login: false
       })
-      .eq("id", usuarioTemp.id);
+      .eq("id", Number(usuarioTemp.id))
+      .select();
+
+    setCarregando(false);
 
     if (error) {
-      alert("Erro ao atualizar senha");
+      console.error("Erro Supabase:", error);
+      alert("Erro ao atualizar senha no banco: " + error.message);
       return;
     }
 
-    const atualizado = {
-      ...usuarioTemp,
-      senha: novaSenha,
-      primeiro_login: false
-    };
+    if (!data || data.length === 0) {
+      alert("Não foi possível atualizar o registro no banco. Verifique permissões RLS.");
+      return;
+    }
 
-    localStorage.setItem("usuarioLogado", JSON.stringify(atualizado));
+    const atualizado = data[0];
+
+    if (manterConectado) {
+      localStorage.setItem("usuarioLogado", JSON.stringify(atualizado));
+    }
+
     setUsuarioLogado(atualizado);
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-900 p-4">
-
       <div className="w-full max-w-md bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl p-8 space-y-6">
-
         <div className="text-center">
           <h1 className="text-3xl font-bold text-white">
             Controle de serviços
@@ -83,7 +101,6 @@ export default function Login({ setUsuarioLogado }) {
 
         {!usuarioTemp ? (
           <div className="space-y-4">
-
             <input
               className="w-full bg-white/10 border border-white/20 text-white placeholder-gray-300 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               placeholder="Usuário"
@@ -99,7 +116,6 @@ export default function Login({ setUsuarioLogado }) {
               onChange={e => setSenha(e.target.value)}
             />
 
-            {/* CHECKBOX */}
             <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
               <input
                 type="checkbox"
@@ -112,15 +128,14 @@ export default function Login({ setUsuarioLogado }) {
 
             <button
               onClick={entrar}
-              className="w-full bg-gradient-to-r from-indigo-500 to-blue-600 hover:opacity-90 transition text-white py-3 rounded-xl font-semibold shadow-lg"
+              disabled={carregando}
+              className="w-full bg-gradient-to-r from-indigo-500 to-blue-600 hover:opacity-90 transition text-white py-3 rounded-xl font-semibold shadow-lg disabled:opacity-50"
             >
-              Entrar
+              {carregando ? "Aguarde..." : "Entrar"}
             </button>
-
           </div>
         ) : (
           <div className="space-y-4">
-
             <div className="text-center">
               <h3 className="text-xl font-semibold text-white">
                 Primeiro acesso
@@ -132,7 +147,9 @@ export default function Login({ setUsuarioLogado }) {
 
             <input
               type="password"
-              className="w-full bg-white/10 border border-white/20 text-white placeholder-gray-300 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              maxLength={4}
+              inputMode="numeric"
+              className="w-full bg-white/10 border border-white/20 text-white placeholder-gray-300 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono tracking-widest text-center"
               placeholder="Nova senha (4 dígitos)"
               value={novaSenha}
               onChange={e => setNovaSenha(e.target.value)}
@@ -140,14 +157,13 @@ export default function Login({ setUsuarioLogado }) {
 
             <button
               onClick={definirNovaSenha}
-              className="w-full bg-gradient-to-r from-purple-500 to-indigo-600 hover:opacity-90 transition text-white py-3 rounded-xl font-semibold shadow-lg"
+              disabled={carregando}
+              className="w-full bg-gradient-to-r from-purple-500 to-indigo-600 hover:opacity-90 transition text-white py-3 rounded-xl font-semibold shadow-lg disabled:opacity-50"
             >
-              Salvar nova senha
+              {carregando ? "Salvando..." : "Salvar nova senha"}
             </button>
-
           </div>
         )}
-
       </div>
     </div>
   );

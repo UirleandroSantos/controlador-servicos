@@ -75,7 +75,7 @@ export default function App() {
           {/* MENU */}
           <div className="flex gap- flex-wrap justify-center">
             <Link to="/" className={linkClass("/")}>Serviços</Link>
-            <Link to="/gastos" className={linkClass("/gastos")}>Gastos</Link>
+            <Link to="/gastos" className={linkClass("/gastos")}>Saídas</Link>
 
             {usuarioLogado.role === "admin" && (
               <Link to="/usuarios" className={linkClass("/usuarios")}>

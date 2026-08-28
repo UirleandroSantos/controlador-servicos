@@ -35,7 +35,9 @@ export default function Gastos() {
     };
   }, []);
 
-  const [descricao, setDescricao] = useState("");
+  const [tipoSaida, setTipoSaida] = useState("Gasto");
+  const [descricao, setDescricao] = useState("Alimentação");
+  const [descricaoOutro, setDescricaoOutro] = useState("");
   const [valor, setValor] = useState("");
   const [obs, setObs] = useState("");
   const [data, setData] = useState(hoje);
@@ -49,23 +51,37 @@ export default function Gastos() {
   const [gastosPeriodo, setGastosPeriodo] = useState([]);
 
   const [editandoId, setEditandoId] = useState(null);
+  const [editandoTipo, setEditandoTipo] = useState(null);
   const [busca, setBusca] = useState("");
 
   const carregar = useCallback(async () => {
     if (!userId) return;
 
-    const { data: dados, error } = await supabase
-      .from("gastos")
-      .select("*")
-      .eq("usuario_id", userId)
-      .order("data", { ascending: false });
+    // Busca registros das duas tabelas em paralelo
+    const [resGastos, resAdiantamentos] = await Promise.all([
+      supabase.from("gastos").select("*").eq("usuario_id", userId),
+      supabase.from("adiantamentos").select("*").eq("usuario_id", userId)
+    ]);
 
-    if (error) {
-      console.error("Erro ao carregar gastos:", error);
-      return;
-    }
+    if (resGastos.error) console.error("Erro ao carregar gastos:", resGastos.error);
+    if (resAdiantamentos.error) console.error("Erro ao carregar adiantamentos:", resAdiantamentos.error);
 
-    setLista(dados || []);
+    const gastosFormatados = (resGastos.data || []).map(item => ({
+      ...item,
+      tipo_origem: "Gasto"
+    }));
+
+    const adiantamentosFormatados = (resAdiantamentos.data || []).map(item => ({
+      ...item,
+      tipo_origem: "Adiantamento"
+    }));
+
+    // Une as duas listas e ordena por data decrescente
+    const unificados = [...gastosFormatados, ...adiantamentosFormatados].sort(
+      (a, b) => new Date(b.data) - new Date(a.data)
+    );
+
+    setLista(unificados);
   }, [userId]);
 
   useEffect(() => {
@@ -83,54 +99,76 @@ export default function Gastos() {
   }
 
   const limparFormulario = () => {
-    setDescricao("");
+    setTipoSaida("Gasto");
+    setDescricao("Alimentação");
+    setDescricaoOutro("");
     setValor("");
     setObs("");
     setData(hoje);
+    setEditandoId(null);
+    setEditandoTipo(null);
   };
 
   const salvar = async () => {
-    if (!descricao || !valor) {
-      alert("Preencha tipo e valor");
+    const descFinal = tipoSaida === "Gasto" 
+      ? (descricao === "Outro" ? descricaoOutro : descricao)
+      : descricao;
+
+    if (!descFinal || !valor) {
+      alert("Preencha a descrição/tipo e o valor");
       return;
     }
 
     const payload = {
       usuario_id: userId,
-      descricao,
+      descricao: `[${tipoSaida}] ${descFinal}`,
       valor: Number(valor),
       obs,
       data
     };
 
-    if (editandoId) {
-      const { error } = await supabase
-        .from("gastos")
-        .update(payload)
-        .eq("id", editandoId);
+    const tabelaDestino = tipoSaida === "Gasto" ? "gastos" : "adiantamentos";
 
-      if (error) {
-        alert("Erro ao atualizar gasto: " + error.message);
-        return;
+    if (editandoId) {
+      // Se alterou o tipo durante a edição, remove da tabela antiga e insere na nova
+      if (editandoTipo !== tipoSaida) {
+        const tabelaAntiga = editandoTipo === "Gasto" ? "gastos" : "adiantamentos";
+        await supabase.from(tabelaAntiga).delete().eq("id", editandoId);
+        
+        const { error } = await supabase.from(tabelaDestino).insert([payload]);
+        if (error) {
+          alert("Erro ao salvar saída: " + error.message);
+          return;
+        }
+      } else {
+        const { error } = await supabase
+          .from(tabelaDestino)
+          .update(payload)
+          .eq("id", editandoId);
+
+        if (error) {
+          alert("Erro ao atualizar saída: " + error.message);
+          return;
+        }
       }
     } else {
-      const { error } = await supabase.from("gastos").insert([payload]);
+      const { error } = await supabase.from(tabelaDestino).insert([payload]);
 
       if (error) {
-        alert("Erro ao salvar gasto: " + error.message);
+        alert("Erro ao salvar saída: " + error.message);
         return;
       }
     }
 
-    setEditandoId(null);
     limparFormulario();
     carregar();
   };
 
-  const excluir = async (id) => {
-    if (!window.confirm("Deseja excluir este gasto?")) return;
+  const excluir = async (item) => {
+    if (!window.confirm("Deseja excluir esta saída?")) return;
 
-    const { error } = await supabase.from("gastos").delete().eq("id", id);
+    const tabela = item.tipo_origem === "Gasto" ? "gastos" : "adiantamentos";
+    const { error } = await supabase.from(tabela).delete().eq("id", item.id);
     if (error) {
       alert("Erro ao excluir: " + error.message);
       return;
@@ -139,11 +177,29 @@ export default function Gastos() {
   };
 
   const editar = (item) => {
-    setDescricao(item.descricao || item.nome || item.gasto || "");
+    const descTratada = item.descricao || item.nome || item.gasto || "";
+    const eAdiantamento = item.tipo_origem === "Adiantamento" || descTratada.startsWith("[Adiantamento]");
+
+    if (eAdiantamento) {
+      setTipoSaida("Adiantamento");
+      setDescricao(descTratada.replace("[Adiantamento] ", ""));
+    } else {
+      setTipoSaida("Gasto");
+      const limpa = descTratada.replace("[Gasto] ", "");
+      if (["Alimentação", "Combustível", "Transporte"].includes(limpa)) {
+        setDescricao(limpa);
+        setDescricaoOutro("");
+      } else {
+        setDescricao("Outro");
+        setDescricaoOutro(limpa);
+      }
+    }
+
     setValor(item.valor);
     setObs(item.obs || "");
     setData(item.data);
     setEditandoId(item.id);
+    setEditandoTipo(eAdiantamento ? "Adiantamento" : "Gasto");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -179,7 +235,7 @@ export default function Gastos() {
             <div className="p-2 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-400">
               <Receipt size={20} />
             </div>
-            Controle de Gastos
+            Controle de Saídas
           </h1>
           <p className="text-slate-400 text-xs mt-1">
             Registre suas despesas e controle as saídas financeiras
@@ -191,23 +247,66 @@ export default function Gastos() {
         <div className="flex items-center gap-2 mb-2">
           <PlusCircle size={18} className="text-rose-400" />
           <h2 className="text-sm font-semibold text-slate-200">
-            {editandoId ? "Editar Gasto" : "Novo Gasto"}
+            {editandoId ? "Editar Saída" : "Nova Saída"}
           </h2>
         </div>
 
         <div className="grid md:grid-cols-2 gap-3.5">
           <div>
-            <label className="text-xs font-medium text-slate-400 mb-1.5 block">Descrição / Tipo do Gasto</label>
-            <input
-              className="w-full bg-slate-950 border border-slate-800 focus:border-rose-500/50 focus:ring-1 focus:ring-rose-500/50 p-2.5 rounded-xl text-xs text-slate-200 placeholder-slate-500 outline-none transition"
-              placeholder="Ex: Lâminas de Tosa, Shampoo, Aluguel"
-              value={descricao}
-              onChange={e => setDescricao(e.target.value)}
-            />
+            <label className="text-xs font-medium text-slate-400 mb-1.5 block">Tipo de Saída</label>
+            <select
+              className="w-full bg-slate-950 border border-slate-800 focus:border-rose-500/50 focus:ring-1 focus:ring-rose-500/50 p-2.5 rounded-xl text-xs text-slate-200 outline-none transition"
+              value={tipoSaida}
+              onChange={e => {
+                setTipoSaida(e.target.value);
+                if (e.target.value === "Gasto") {
+                  setDescricao("Alimentação");
+                } else {
+                  setDescricao("");
+                }
+              }}
+            >
+              <option value="Gasto">Gasto</option>
+              <option value="Adiantamento">Adiantamento</option>
+            </select>
           </div>
 
           <div>
-            <label className="text-xs font-medium text-slate-400 mb-1.5 block">Valor do Gasto</label>
+            <label className="text-xs font-medium text-slate-400 mb-1.5 block">Descrição / Categoria</label>
+            {tipoSaida === "Gasto" ? (
+              <div className="space-y-2">
+                <select
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-rose-500/50 focus:ring-1 focus:ring-rose-500/50 p-2.5 rounded-xl text-xs text-slate-200 outline-none transition"
+                  value={descricao}
+                  onChange={e => setDescricao(e.target.value)}
+                >
+                  <option value="Alimentação">Alimentação</option>
+                  <option value="Combustível">Combustível</option>
+                  <option value="Transporte">Transporte</option>
+                  <option value="Outro">Outro</option>
+                </select>
+
+                {descricao === "Outro" && (
+                  <input
+                    className="w-full bg-slate-950 border border-slate-800 focus:border-rose-500/50 focus:ring-1 focus:ring-rose-500/50 p-2.5 rounded-xl text-xs text-slate-200 placeholder-slate-500 outline-none transition"
+                    placeholder="Especifique a descrição..."
+                    value={descricaoOutro}
+                    onChange={e => setDescricaoOutro(e.target.value)}
+                  />
+                )}
+              </div>
+            ) : (
+              <input
+                className="w-full bg-slate-950 border border-slate-800 focus:border-rose-500/50 focus:ring-1 focus:ring-rose-500/50 p-2.5 rounded-xl text-xs text-slate-200 placeholder-slate-500 outline-none transition"
+                placeholder="Ex: Nome do funcionário ou finalidade"
+                value={descricao}
+                onChange={e => setDescricao(e.target.value)}
+              />
+            )}
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-slate-400 mb-1.5 block">Valor da Saída</label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs font-bold">R$</span>
               <input
@@ -221,7 +320,7 @@ export default function Gastos() {
           </div>
 
           <div>
-            <label className="text-xs font-medium text-slate-400 mb-1.5 block">Data do Gasto</label>
+            <label className="text-xs font-medium text-slate-400 mb-1.5 block">Data da Saída</label>
             <input
               type="date"
               className="w-full bg-slate-950 border border-slate-800 focus:border-rose-500/50 focus:ring-1 focus:ring-rose-500/50 p-2.5 rounded-xl text-xs text-slate-200 outline-none transition"
@@ -230,7 +329,7 @@ export default function Gastos() {
             />
           </div>
 
-          <div>
+          <div className="md:col-span-2">
             <label className="text-xs font-medium text-slate-400 mb-1.5 block">Observações (opcional)</label>
             <input
               className="w-full bg-slate-950 border border-slate-800 focus:border-rose-500/50 focus:ring-1 focus:ring-rose-500/50 p-2.5 rounded-xl text-xs text-slate-200 placeholder-slate-500 outline-none transition"
@@ -246,7 +345,7 @@ export default function Gastos() {
           className="w-full bg-rose-600 hover:bg-rose-500 font-medium text-white py-2.5 rounded-xl transition shadow-lg shadow-rose-950/20 text-xs active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
         >
           <CheckCircle2 size={16} />
-          {editandoId ? "Atualizar Gasto" : "Salvar Gasto"}
+          {editandoId ? "Atualizar Saída" : "Salvar Saída"}
         </button>
       </div>
 
@@ -257,11 +356,11 @@ export default function Gastos() {
         >
           {mostrarLista ? (
             <>
-              <EyeOff size={15} className="text-rose-400" /> Ocultar Gastos
+              <EyeOff size={15} className="text-rose-400" /> Ocultar Saídas
             </>
           ) : (
             <>
-              <Eye size={15} className="text-rose-400" /> Ver Gastos do Mês
+              <Eye size={15} className="text-rose-400" /> Ver Saídas do Mês
             </>
           )}
         </button>
@@ -271,7 +370,7 @@ export default function Gastos() {
         <div className="space-y-4 animate-in fade-in duration-200">
           <div className="bg-rose-500/10 border border-rose-500/20 p-4 rounded-2xl flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-slate-400">Total de Gastos no Mês</p>
+              <p className="text-xs font-medium text-slate-400">Total de Saídas no Mês</p>
               <h2 className="text-lg font-bold text-rose-400 font-mono mt-0.5">
                 R$ {totalGastosMes.toFixed(2).replace(".", ",")}
               </h2>
@@ -295,10 +394,10 @@ export default function Gastos() {
 
             <div className="space-y-2 pt-1">
               {gastosFiltrados.map(item => {
-                const desc = item.descricao || item.nome || item.gasto || "Gasto Sem Descrição";
+                const desc = item.descricao || item.nome || item.gasto || "Saída Sem Descrição";
                 return (
                   <div
-                    key={item.id}
+                    key={`${item.tipo_origem}-${item.id}`}
                     className="flex items-center justify-between p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 hover:border-slate-700 transition group"
                   >
                     <div className="space-y-1">
@@ -327,7 +426,7 @@ export default function Gastos() {
                       </button>
 
                       <button
-                        onClick={() => excluir(item.id)}
+                        onClick={() => excluir(item)}
                         className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
                         title="Excluir"
                       >
@@ -340,7 +439,7 @@ export default function Gastos() {
 
               {gastosFiltrados.length === 0 && (
                 <div className="text-center py-6">
-                  <p className="text-xs text-slate-500">Nenhum gasto encontrado neste mês.</p>
+                  <p className="text-xs text-slate-500">Nenhuma saída encontrada neste mês.</p>
                 </div>
               )}
             </div>
@@ -351,7 +450,7 @@ export default function Gastos() {
       <div className="bg-slate-900/80 border border-slate-800/80 p-5 rounded-2xl space-y-4">
         <div className="flex items-center gap-2">
           <Filter size={16} className="text-indigo-400" />
-          <h2 className="text-sm font-semibold text-slate-200">Consultar Gastos por Período</h2>
+          <h2 className="text-sm font-semibold text-slate-200">Consultar Saídas por Período</h2>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -385,7 +484,7 @@ export default function Gastos() {
         {gastosPeriodo.length > 0 && (
           <div className="space-y-4 pt-2">
             <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800">
-              <span className="text-xs text-slate-400 font-medium">Subtotal de Gastos no Período</span>
+              <span className="text-xs text-slate-400 font-medium">Subtotal de Saídas no Período</span>
               <span className="text-sm font-bold text-rose-400 font-mono">
                 R$ {subtotal.toFixed(2).replace(".", ",")}
               </span>
@@ -393,10 +492,10 @@ export default function Gastos() {
 
             <div className="space-y-2">
               {gastosPeriodo.map(item => {
-                const desc = item.descricao || item.nome || item.gasto || "Gasto Sem Descrição";
+                const desc = item.descricao || item.nome || item.gasto || "Saída Sem Descrição";
                 return (
                   <div
-                    key={item.id}
+                    key={`${item.tipo_origem}-${item.id}`}
                     className="bg-slate-950 border border-slate-800/80 p-3 rounded-xl flex items-center justify-between"
                   >
                     <div>

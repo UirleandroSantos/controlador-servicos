@@ -48,6 +48,7 @@ export default function Servicos() {
 
   const [lista, setLista] = useState([]);
   const [gastos, setGastos] = useState([]);
+  const [adiantamentos, setAdiantamentos] = useState([]);
 
   const [mostrarLista, setMostrarLista] = useState(true);
   const [editandoId, setEditandoId] = useState(null);
@@ -61,6 +62,7 @@ export default function Servicos() {
   const [brutoPeriodo, setBrutoPeriodo] = useState(0);
   const [liquidoPeriodo, setLiquidoPeriodo] = useState(0);
   const [gastosPeriodo, setGastosPeriodo] = useState(0);
+  const [adiantamentosPeriodo, setAdiantamentosPeriodo] = useState(0);
   const [receberPeriodo, setReceberPeriodo] = useState(0);
 
   const [busca, setBusca] = useState("");
@@ -103,12 +105,29 @@ export default function Servicos() {
     setGastos(dados || []);
   }, [userId]);
 
+  const carregarAdiantamentos = useCallback(async () => {
+    if (!userId) return;
+
+    const { data: dados, error } = await supabase
+      .from("adiantamentos")
+      .select("*")
+      .eq("usuario_id", userId);
+
+    if (error) {
+      console.error("Erro ao carregar adiantamentos:", error);
+      return;
+    }
+
+    setAdiantamentos(dados || []);
+  }, [userId]);
+
   useEffect(() => {
     if (userId) {
       carregar();
       carregarGastos();
+      carregarAdiantamentos();
     }
-  }, [userId, carregar, carregarGastos]);
+  }, [userId, carregar, carregarGastos, carregarAdiantamentos]);
 
   if (!usuarioLogado) {
     return (
@@ -195,10 +214,15 @@ export default function Servicos() {
       i => (!inicio || i.data >= inicio) && (!fim || i.data <= fim)
     );
 
+    const adiantamentosFiltrados = adiantamentos.filter(
+      i => (!inicio || i.data >= inicio) && (!fim || i.data <= fim)
+    );
+
     const bruto = filtrados.reduce((s, i) => s + Number(i.valor || 0), 0);
     const gastosTotal = gastosFiltrados.reduce((s, i) => s + Number(i.valor || 0), 0);
+    const adiantamentosTotal = adiantamentosFiltrados.reduce((s, i) => s + Number(i.valor || 0), 0);
     const liquido = bruto / 2;
-    const receber = (bruto - gastosTotal) / 2;
+    const receber = ((bruto - gastosTotal) / 2) - adiantamentosTotal;
 
     setSubtotalPeriodo(bruto);
     setServicosPeriodo(filtrados);
@@ -206,6 +230,7 @@ export default function Servicos() {
     setBrutoPeriodo(bruto);
     setLiquidoPeriodo(liquido);
     setGastosPeriodo(gastosTotal);
+    setAdiantamentosPeriodo(adiantamentosTotal);
     setReceberPeriodo(receber);
   };
 
@@ -218,10 +243,15 @@ export default function Servicos() {
       i => (!dataInicio || i.data >= dataInicio) && (!dataFim || i.data <= dataFim)
     );
 
+    const adiantamentosFiltrados = adiantamentos.filter(
+      i => (!dataInicio || i.data >= dataInicio) && (!dataFim || i.data <= dataFim)
+    );
+
     const totalBrutoServicos = servicosFiltrados.reduce((acc, cur) => acc + Number(cur.valor || 0), 0);
     const totalGastosComp = gastosFiltrados.reduce((acc, cur) => acc + Number(cur.valor || 0), 0);
+    const totalAdiantamentosComp = adiantamentosFiltrados.reduce((acc, cur) => acc + Number(cur.valor || 0), 0);
     const liquidoComp = totalBrutoServicos / 2;
-    const receberComp = (totalBrutoServicos - totalGastosComp) / 2;
+    const receberComp = ((totalBrutoServicos - totalGastosComp) / 2) - totalAdiantamentosComp;
 
     const formatarDataBR = (strData) => {
       if (!strData) return "";
@@ -247,6 +277,7 @@ export default function Servicos() {
 
     msg += `💵 *Bruto Total:* R$ ${totalBrutoServicos.toFixed(2).replace(".", ",")}\n`;
     msg += `📉 *Total de Gastos:* R$ ${totalGastosComp.toFixed(2).replace(".", ",")}\n`;
+    msg += `📙 *Adiantamentos:* R$ ${totalAdiantamentosComp.toFixed(2).replace(".", ",")}\n`;
     msg += `🔷 *Líquido:* R$ ${liquidoComp.toFixed(2).replace(".", ",")}\n`;
     msg += `⭐ *A Receber:* R$ ${receberComp.toFixed(2).replace(".", ",")}\n\n`;
 
@@ -283,6 +314,17 @@ export default function Servicos() {
       });
     }
 
+    msg += `\n-----------------------------------\n`;
+    msg += `📙 *ADIANTAMENTOS (${adiantamentosFiltrados.length})*\n`;
+    if (adiantamentosFiltrados.length === 0) {
+      msg += `_Nenhum adiantamento cadastrado no período._\n`;
+    } else {
+      adiantamentosFiltrados.forEach((adiantamento) => {
+        const desc = adiantamento.descricao || adiantamento.nome || "Adiantamento sem descrição";
+        msg += `• *${desc}* - R$ ${Number(adiantamento.valor).toFixed(2).replace(".", ",")} [${formatarDataBR(adiantamento.data)}]\n`;
+      });
+    }
+
     const encoded = encodeURIComponent(msg);
     window.open(`https://api.whatsapp.com/send?text=${encoded}`, "_blank");
 
@@ -308,6 +350,12 @@ export default function Servicos() {
     );
   }, [gastos, primeiroDiaDoMes, hoje]);
 
+  const adiantamentosDoMesAtual = useMemo(() => {
+    return adiantamentos.filter(
+      (item) => (!primeiroDiaDoMes || item.data >= primeiroDiaDoMes) && (!hoje || item.data <= hoje)
+    );
+  }, [adiantamentos, primeiroDiaDoMes, hoje]);
+
   const servicosFiltrados = servicosDoMesAtual.filter(item =>
     item.servico?.toLowerCase().includes(busca.toLowerCase()) ||
     item.nome?.toLowerCase().includes(busca.toLowerCase()) ||
@@ -317,7 +365,8 @@ export default function Servicos() {
   const totalBruto = servicosDoMesAtual.reduce((s, i) => s + Number(i.valor || 0), 0);
   const totalLiquido = totalBruto / 2;
   const totalGastos = gastosDoMesAtual.reduce((s, i) => s + Number(i.valor || 0), 0);
-  const totalReceber = (totalBruto - totalGastos) / 2;
+  const totalAdiantamentos = adiantamentosDoMesAtual.reduce((s, i) => s + Number(i.valor || 0), 0);
+  const totalReceber = ((totalBruto - totalGastos) / 2) - totalAdiantamentos;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12 text-slate-100 antialiased">
@@ -441,10 +490,11 @@ export default function Servicos() {
 
       {mostrarLista && (
         <div className="space-y-4 animate-in fade-in duration-200">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             <Card titulo="Bruto" valor={totalBruto} cor="text-emerald-400" bg="bg-emerald-500/10 border-emerald-500/20" />
             <Card titulo="Líquido" valor={totalLiquido} cor="text-sky-400" bg="bg-sky-500/10 border-sky-500/20" />
             <Card titulo="Gastos" valor={totalGastos} cor="text-rose-400" bg="bg-rose-500/10 border-rose-500/20" />
+            <Card titulo="Adiantamentos" valor={totalAdiantamentos} cor="text-amber-400" bg="bg-amber-500/10 border-amber-500/20" />
             <Card titulo="A Receber" valor={totalReceber} cor="text-purple-400" bg="bg-purple-500/10 border-purple-500/20" />
           </div>
 
@@ -553,10 +603,11 @@ export default function Servicos() {
 
         {servicosPeriodo.length > 0 && (
           <div className="space-y-4 pt-2">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5">
               <Card titulo="Bruto" valor={brutoPeriodo} cor="text-emerald-400" bg="bg-emerald-500/10 border-emerald-500/20" />
               <Card titulo="Líquido" valor={liquidoPeriodo} cor="text-sky-400" bg="bg-sky-500/10 border-sky-500/20" />
               <Card titulo="Gastos" valor={gastosPeriodo} cor="text-rose-400" bg="bg-rose-500/10 border-rose-500/20" />
+              <Card titulo="Adiantamentos" valor={adiantamentosPeriodo} cor="text-amber-400" bg="bg-amber-500/10 border-amber-500/20" />
               <Card titulo="A Receber" valor={receberPeriodo} cor="text-purple-400" bg="bg-purple-500/10 border-purple-500/20" />
             </div>
 

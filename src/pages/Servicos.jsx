@@ -282,10 +282,10 @@ export default function Servicos() {
     msg += `⭐ *A Receber:* R$ ${receberComp.toFixed(2).replace(".", ",")}\n\n`;
 
     msg += `-----------------------------------\n`;
-    msg += `✂️ *SERVIÇOS PRESTADOS (${servicosFiltrados.length})*\n`;
+    msg += `✂️ *SERVIÇOS PRESTADOS (${servicosFiltrados.length})*\n\n`;
 
     if (servicosFiltrados.length === 0) {
-      msg += `_Nenhum serviço cadastrado no período._\n`;
+      msg += `_Nenhum serviço cadastrado no período._\n\n`;
     } else {
       const servicosPorData = servicosFiltrados.reduce((acc, item) => {
         if (!acc[item.data]) acc[item.data] = [];
@@ -296,32 +296,37 @@ export default function Servicos() {
       const datasOrdenadas = Object.keys(servicosPorData).sort((a, b) => b.localeCompare(a));
 
       datasOrdenadas.forEach((dataChave) => {
-        msg += `\n📅 *${formatarCabecalhoDia(dataChave)}*\n`;
+        msg += `📅 *${formatarCabecalhoDia(dataChave)}*\n\n`;
         servicosPorData[dataChave].forEach((item) => {
-          msg += `• *${item.servico}* (${item.nome}) - R$ ${Number(item.valor).toFixed(2).replace(".", ",")}\n`;
+          msg += `• *${item.servico}* (${item.nome}) - R$ ${Number(item.valor).toFixed(2).replace(".", ",")}\n\n`;
         });
       });
     }
 
     msg += `\n-----------------------------------\n`;
-    msg += `💸 *GASTOS/DESPESAS (${gastosFiltrados.length})*\n`;
+    msg += `💸 *GASTOS/DESPESAS (${gastosFiltrados.length})*\n\n`;
     if (gastosFiltrados.length === 0) {
-      msg += `_Nenhum gasto cadastrado no período._\n`;
+      msg += `_Nenhum gasto cadastrado no período._\n\n`;
     } else {
       gastosFiltrados.forEach((gasto) => {
-        const desc = gasto.descricao || gasto.nome || gasto.gasto || "Gasto sem descrição";
-        msg += `• *${desc}* - R$ ${Number(gasto.valor).toFixed(2).replace(".", ",")} [${formatarDataBR(gasto.data)}]\n`;
+        const desc = gasto.descricao || gasto.nome || gasto.gasto || "Sem descrição";
+        msg += `• *${desc}* - R$ ${Number(gasto.valor).toFixed(2).replace(".", ",")} [${formatarDataBR(gasto.data)}]\n\n`;
       });
     }
 
-    msg += `\n-----------------------------------\n`;
-    msg += `📙 *ADIANTAMENTOS (${adiantamentosFiltrados.length})*\n`;
+    msg += `-----------------------------------\n`;
+    msg += `📙 *ADIANTAMENTOS (${adiantamentosFiltrados.length})*\n\n`;
     if (adiantamentosFiltrados.length === 0) {
-      msg += `_Nenhum adiantamento cadastrado no período._\n`;
+      msg += `_Nenhum adiantamento cadastrado no período._\n\n`;
     } else {
       adiantamentosFiltrados.forEach((adiantamento) => {
-        const desc = adiantamento.descricao || adiantamento.nome || "Adiantamento sem descrição";
-        msg += `• *${desc}* - R$ ${Number(adiantamento.valor).toFixed(2).replace(".", ",")} [${formatarDataBR(adiantamento.data)}]\n`;
+        // Pega apenas o valor da descrição/nome
+        let desc = adiantamento.descricao || adiantamento.nome || "Sem descrição";
+        
+        // Remove a palavra "Adiantamento" (com ou sem colchetes) se estiver gravada na string
+        desc = desc.replace(/\[?Adiantamento\]?/gi, "").trim();
+
+        msg += `• *${desc}* - R$ ${Number(adiantamento.valor).toFixed(2).replace(".", ",")} [${formatarDataBR(adiantamento.data)}]\n\n`;
       });
     }
 

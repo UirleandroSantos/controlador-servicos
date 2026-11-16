@@ -13,7 +13,8 @@ import {
   Filter,
   Share2,
   Send,
-  X
+  X,
+  AlertTriangle
 } from "lucide-react";
 
 export default function Servicos() {
@@ -52,6 +53,7 @@ export default function Servicos() {
 
   const [mostrarLista, setMostrarLista] = useState(true);
   const [editandoId, setEditandoId] = useState(null);
+  const [showFormModal, setShowFormModal] = useState(false);
 
   const [inicio, setInicio] = useState(primeiroDiaDoMes);
   const [fim, setFim] = useState(hoje);
@@ -71,6 +73,11 @@ export default function Servicos() {
   const [showCustomPeriodModal, setShowCustomPeriodModal] = useState(false);
   const [shareInicio, setShareInicio] = useState(hoje);
   const [shareFim, setShareFim] = useState(hoje);
+
+  const [showDeletePeriodModal, setShowDeletePeriodModal] = useState(false);
+  const [deleteInicio, setDeleteInicio] = useState(primeiroDiaDoMes);
+  const [deleteFim, setDeleteFim] = useState(hoje);
+  const [excluindoPeriodo, setExcluindoPeriodo] = useState(false);
 
   const carregar = useCallback(async () => {
     if (!userId) return;
@@ -145,6 +152,18 @@ export default function Servicos() {
     setData(hoje);
   };
 
+  const abrirModalNovoServico = () => {
+    setEditandoId(null);
+    limparFormulario();
+    setShowFormModal(true);
+  };
+
+  const fecharModalForm = () => {
+    setShowFormModal(false);
+    setEditandoId(null);
+    limparFormulario();
+  };
+
   const salvar = async () => {
     if (!servico || !nome || !valor) {
       alert("Preencha todos os campos obrigatórios");
@@ -179,8 +198,7 @@ export default function Servicos() {
       }
     }
 
-    setEditandoId(null);
-    limparFormulario();
+    fecharModalForm();
     carregar();
   };
 
@@ -195,6 +213,55 @@ export default function Servicos() {
     carregar();
   };
 
+  const qtdServicosParaExcluir = useMemo(() => {
+    if (!deleteInicio || !deleteFim) return 0;
+    return lista.filter(i => i.data >= deleteInicio && i.data <= deleteFim).length;
+  }, [lista, deleteInicio, deleteFim]);
+
+  const apagarPorPeriodo = async () => {
+    if (!deleteInicio || !deleteFim) {
+      alert("Selecione a data inicial e a data final.");
+      return;
+    }
+
+    if (deleteInicio > deleteFim) {
+      alert("A data inicial não pode ser maior que a data final.");
+      return;
+    }
+
+    if (qtdServicosParaExcluir === 0) {
+      alert("Nenhum serviço encontrado no período selecionado.");
+      return;
+    }
+
+    const [y1, m1, d1] = deleteInicio.split("-");
+    const [y2, m2, d2] = deleteFim.split("-");
+    const confirmacao = window.confirm(
+      `Tem certeza que deseja apagar permanentemente ${qtdServicosParaExcluir} serviço(s) de ${d1}/${m1}/${y1} até ${d2}/${m2}/${y2}?`
+    );
+
+    if (!confirmacao) return;
+
+    setExcluindoPeriodo(true);
+    const { error } = await supabase
+      .from("servicos")
+      .delete()
+      .eq("usuario_id", userId)
+      .gte("data", deleteInicio)
+      .lte("data", deleteFim);
+
+    setExcluindoPeriodo(false);
+
+    if (error) {
+      alert("Erro ao apagar serviços do período: " + error.message);
+      return;
+    }
+
+    setShowDeletePeriodModal(false);
+    setServicosPeriodo([]);
+    carregar();
+  };
+
   const editar = (item) => {
     setServico(item.servico);
     setNome(item.nome);
@@ -202,7 +269,7 @@ export default function Servicos() {
     setObs(item.obs || "");
     setData(item.data);
     setEditandoId(item.id);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    setShowFormModal(true);
   };
 
   const calcularPeriodo = () => {
@@ -320,10 +387,7 @@ export default function Servicos() {
       msg += `_Nenhum adiantamento cadastrado no período._\n\n`;
     } else {
       adiantamentosFiltrados.forEach((adiantamento) => {
-        // Pega apenas o valor da descrição/nome
         let desc = adiantamento.descricao || adiantamento.nome || "Sem descrição";
-        
-        // Remove a palavra "Adiantamento" (com ou sem colchetes) se estiver gravada na string
         desc = desc.replace(/\[?Adiantamento\]?/gi, "").trim();
 
         msg += `• *${desc}* - R$ ${Number(adiantamento.valor).toFixed(2).replace(".", ",")} [${formatarDataBR(adiantamento.data)}]\n\n`;
@@ -374,279 +438,393 @@ export default function Servicos() {
   const totalReceber = ((totalBruto - totalGastos) / 2) - totalAdiantamentos;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 pb-12 text-slate-100 antialiased">
-      <button
-        onClick={() => setShowShareModal(true)}
-        className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 shadow-lg shadow-emerald-950/30 transition active:scale-95 cursor-pointer self-start sm:self-auto"
-      >
-        <Share2 size={16} />
-        Compartilhar
-      </button>
-
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-4 gap-3">
+    <div className="max-w-5xl mx-auto h-[calc(100vh-2rem)] flex flex-col justify-between gap-3 py-2 px-3 text-slate-100 antialiased overflow-hidden">
+      {/* Cabeçalho e Ações Principais */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-2.5 gap-2 shrink-0">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100 tracking-tight flex items-center gap-2.5">
-            <div className="p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400">
-              <Scissors size={20} />
+          <h1 className="text-xl font-bold text-slate-100 tracking-tight flex items-center gap-2">
+            <div className="p-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400">
+              <Scissors size={18} />
             </div>
             Controle de Serviços
           </h1>
-          <p className="text-slate-400 text-xs mt-1">
+          <p className="text-slate-400 text-[11px] mt-0.5">
             Cadastre novos atendimentos e acompanhe suas finanças
           </p>
         </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={abrirModalNovoServico}
+            className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-3 rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-lg shadow-emerald-950/30 transition active:scale-95 cursor-pointer"
+          >
+            <PlusCircle size={15} />
+            Novo Serviço
+          </button>
+
+          <button
+            onClick={() => setShowShareModal(true)}
+            className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
+          >
+            <Share2 size={15} className="text-emerald-400" />
+            Compartilhar
+          </button>
+
+          <button
+            onClick={() => setMostrarLista(!mostrarLista)}
+            className="bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white px-3.5 py-2 rounded-xl text-xs font-medium transition flex items-center gap-1.5 active:scale-95 shadow-sm cursor-pointer"
+          >
+            {mostrarLista ? (
+              <>
+                <EyeOff size={14} className="text-rose-400" /> Ocultar Trabalhos
+              </>
+            ) : (
+              <>
+                <Eye size={14} className="text-emerald-400" /> Ver Serviços do Mês
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
-      <div className="bg-slate-900/80 backdrop-blur-md border border-slate-800/80 p-5 md:p-6 rounded-2xl shadow-xl space-y-4">
-        <div className="flex items-center gap-2 mb-2">
-          <PlusCircle size={18} className="text-emerald-400" />
-          <h2 className="text-sm font-semibold text-slate-200">
-            {editandoId ? "Editar Atendimento" : "Novo Atendimento"}
-          </h2>
-        </div>
-
-        <div className="grid md:grid-cols-2 gap-3.5">
-          <div>
-            <label className="text-xs font-medium text-slate-400 mb-1.5 block">Serviço Prestado</label>
-            <select
-              value={servico}
-              onChange={e => setServico(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 p-2.5 rounded-xl text-xs text-slate-200 outline-none transition"
-            >
-              <option value="" disabled>Selecione o serviço</option>
-              <option>Banho</option>
-              <option>Banho + Tosa Higiênica</option>
-              <option>Banho + Tosa Completa</option>
-              <option>Outro</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="text-xs font-medium text-slate-400 mb-1.5 block">Nome do Pet ou Cliente</label>
-            <input
-              className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 p-2.5 rounded-xl text-xs text-slate-200 placeholder-slate-500 outline-none transition"
-              placeholder="Ex: Rex / Maria Silva"
-              value={nome}
-              onChange={e => setNome(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="text-xs font-medium text-slate-400 mb-1.5 block">Valor Cobrado</label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs font-bold">R$</span>
-              <input
-                type="number"
-                className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 pl-8 pr-3 py-2.5 rounded-xl text-xs text-slate-200 placeholder-slate-500 outline-none transition font-mono"
-                placeholder="0,00"
-                value={valor}
-                onChange={e => setValor(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="text-xs font-medium text-slate-400 mb-1.5 block">Data do Atendimento</label>
-            <input
-              type="date"
-              className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 p-2.5 rounded-xl text-xs text-slate-200 outline-none transition"
-              value={data}
-              onChange={e => setData(e.target.value)}
-            />
-          </div>
-        </div>
-
-        <div>
-          <label className="text-xs font-medium text-slate-400 mb-1.5 block">Observações (opcional)</label>
-          <textarea
-            rows="2"
-            className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 p-2.5 rounded-xl text-xs text-slate-200 placeholder-slate-500 outline-none transition resize-none"
-            placeholder="Anotações adicionais sobre o pet ou cliente..."
-            value={obs}
-            onChange={e => setObs(e.target.value)}
-          />
-        </div>
-
-        <button
-          onClick={salvar}
-          className="w-full bg-emerald-600 hover:bg-emerald-500 font-medium text-white py-2.5 rounded-xl transition shadow-lg shadow-emerald-950/20 text-xs active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
-        >
-          <CheckCircle2 size={16} />
-          {editandoId ? "Atualizar Serviço" : "Salvar Serviço"}
-        </button>
-      </div>
-
-      <div className="flex justify-end">
-        <button
-          onClick={() => setMostrarLista(!mostrarLista)}
-          className="bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white px-4 py-2 rounded-xl text-xs font-medium transition flex items-center gap-2 active:scale-95 shadow-sm cursor-pointer"
-        >
-          {mostrarLista ? (
-            <>
-              <EyeOff size={15} className="text-rose-400" /> Ocultar Trabalhos
-            </>
-          ) : (
-            <>
-              <Eye size={15} className="text-emerald-400" /> Ver Serviços do Mês
-            </>
-          )}
-        </button>
-      </div>
-
-      {mostrarLista && (
-        <div className="space-y-4 animate-in fade-in duration-200">
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <Card titulo="Bruto" valor={totalBruto} cor="text-emerald-400" bg="bg-emerald-500/10 border-emerald-500/20" />
-            <Card titulo="Líquido" valor={totalLiquido} cor="text-sky-400" bg="bg-sky-500/10 border-sky-500/20" />
-            <Card titulo="Gastos" valor={totalGastos} cor="text-rose-400" bg="bg-rose-500/10 border-rose-500/20" />
-            <Card titulo="Adiantamentos" valor={totalAdiantamentos} cor="text-amber-400" bg="bg-amber-500/10 border-amber-500/20" />
-            <Card titulo="A Receber" valor={totalReceber} cor="text-purple-400" bg="bg-purple-500/10 border-purple-500/20" />
-          </div>
-
-          <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-2xl space-y-3">
-            <div className="relative">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-              <input
-                type="text"
-                placeholder="Buscar por serviço, cliente ou obs..."
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 pl-8 pr-3 py-2 rounded-xl text-xs text-slate-200 placeholder-slate-500 outline-none focus:border-emerald-500/50 transition"
-              />
+      {/* Área Central Dinâmica (Ajustada para caber na tela) */}
+      <div className="flex-1 min-h-0 flex flex-col gap-3 overflow-hidden">
+        {mostrarLista && (
+          <div className="flex-1 min-h-0 flex flex-col gap-2.5 animate-in fade-in duration-200">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2 shrink-0">
+              <Card titulo="Bruto" valor={totalBruto} cor="text-emerald-400" bg="bg-emerald-500/10 border-emerald-500/20" />
+              <Card titulo="Líquido" valor={totalLiquido} cor="text-sky-400" bg="bg-sky-500/10 border-sky-500/20" />
+              <Card titulo="Gastos" valor={totalGastos} cor="text-rose-400" bg="bg-rose-500/10 border-rose-500/20" />
+              <Card titulo="Adiantamentos" valor={totalAdiantamentos} cor="text-amber-400" bg="bg-amber-500/10 border-amber-500/20" />
+              <Card titulo="A Receber" valor={totalReceber} cor="text-purple-400" bg="bg-purple-500/10 border-purple-500/20" />
             </div>
 
-            <div className="space-y-2 pt-1">
-              {servicosFiltrados.map(item => (
-                <div
-                  key={item.id}
-                  className="flex items-center justify-between p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 hover:border-slate-700 transition group"
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold text-slate-100">
-                        {item.servico}
-                      </span>
-                      <span className="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full border border-slate-700">
-                        {item.nome}
-                      </span>
+            <div className="flex-1 min-h-0 bg-slate-900/80 border border-slate-800 p-3 rounded-2xl flex flex-col gap-2.5">
+              <div className="relative shrink-0">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                <input
+                  type="text"
+                  placeholder="Buscar por serviço, cliente ou obs..."
+                  value={busca}
+                  onChange={(e) => setBusca(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 pl-8 pr-3 py-1.5 rounded-xl text-xs text-slate-200 placeholder-slate-500 outline-none focus:border-emerald-500/50 transition"
+                />
+              </div>
+
+              <div className="flex-1 overflow-y-auto space-y-0.5 pr-1">
+                {servicosFiltrados.map(item => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/80 hover:border-slate-700 transition group"
+                  >
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-slate-100">
+                          {item.servico}
+                        </span>
+                        <span className="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full border border-slate-700">
+                          {item.nome}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 flex items-center gap-2">
+                        <span>{item.data}</span>
+                        <span>•</span>
+                        <span className="text-emerald-400 font-semibold font-mono">
+                          R$ {Number(item.valor || 0).toFixed(2).replace(".",",")}
+                        </span>
+                      </p>
+                      {item.obs && (
+                        <p className="text-[10px] text-slate-500 italic">"{item.obs}"</p>
+                      )}
                     </div>
-                    <p className="text-[11px] text-slate-400 flex items-center gap-2">
-                      <span>{item.data}</span>
-                      <span>•</span>
-                      <span className="text-emerald-400 font-semibold font-mono">
-                        R$ {Number(item.valor || 0).toFixed(2).replace(".",",")}
-                      </span>
+
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => editar(item)}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition cursor-pointer"
+                        title="Editar"
+                      >
+                        <Pencil size={14} />
+                      </button>
+
+                      <button
+                        onClick={() => excluir(item.id)}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
+                        title="Excluir"
+                      >
+                        <Trash size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                {servicosFiltrados.length === 0 && (
+                  <div className="text-center py-6">
+                    <p className="text-xs text-slate-500">Nenhum serviço encontrado neste mês.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Consulta por Período Customizado */}
+        <div className={`bg-slate-900/80 border border-slate-800/80 p-3.5 rounded-2xl space-y-2.5 ${!mostrarLista ? "flex-1 flex flex-col min-h-0" : "shrink-0"}`}>
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2.5">
+            <div className="flex items-center gap-2 self-start sm:self-center">
+              <Filter size={15} className="text-indigo-400" />
+              <h2 className="text-xs font-semibold text-slate-200">Consultar por Período Customizado</h2>
+            </div>
+
+            <div className="flex items-end gap-2 flex-wrap">
+              <div>
+                <label className="text-[10px] font-medium text-slate-400 mb-0.5 block">Início</label>
+                <input 
+                  type="date" 
+                  value={inicio} 
+                  onChange={e => setInicio(e.target.value)} 
+                  className="bg-slate-950 border border-slate-800 px-2.5 py-1.5 rounded-xl text-xs text-slate-200 outline-none focus:border-indigo-500/50 transition" 
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-medium text-slate-400 mb-0.5 block">Fim</label>
+                <input 
+                  type="date" 
+                  value={fim} 
+                  onChange={e => setFim(e.target.value)} 
+                  className="bg-slate-950 border border-slate-800 px-2.5 py-1.5 rounded-xl text-xs text-slate-200 outline-none focus:border-indigo-500/50 transition" 
+                />
+              </div>
+              <button
+                onClick={calcularPeriodo}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-4 py-1.5 rounded-xl text-xs transition shadow-lg shadow-indigo-950/20 active:scale-[0.99] cursor-pointer h-[32px]"
+              >
+                Calcular Período
+              </button>
+            </div>
+          </div>
+
+          {servicosPeriodo.length > 0 && (
+            <div className="space-y-2 pt-1 flex-1 min-h-0 flex flex-col">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-2 shrink-0">
+                <Card titulo="Bruto" valor={brutoPeriodo} cor="text-emerald-400" bg="bg-emerald-500/10 border-emerald-500/20" />
+                <Card titulo="Líquido" valor={liquidoPeriodo} cor="text-sky-400" bg="bg-sky-500/10 border-sky-500/20" />
+                <Card titulo="Gastos" valor={gastosPeriodo} cor="text-rose-400" bg="bg-rose-500/10 border-rose-500/20" />
+                <Card titulo="Adiantamentos" valor={adiantamentosPeriodo} cor="text-amber-400" bg="bg-amber-500/10 border-amber-500/20" />
+                <Card titulo="A Receber" valor={receberPeriodo} cor="text-purple-400" bg="bg-purple-500/10 border-purple-500/20" />
+              </div>
+
+              <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 shrink-0">
+                <span className="text-xs text-slate-400 font-medium">Subtotal Calculado</span>
+                <span className="text-xs font-bold text-emerald-400 font-mono">
+                  R$ {subtotalPeriodo.toFixed(2).replace(".",",")}
+                </span>
+              </div>
+
+              <div className="space-y-1.5 overflow-y-auto max-h-28 pr-1">
+                {servicosPeriodoFiltrados.map(item => (
+                  <div
+                    key={item.id}
+                    className="bg-slate-950 border border-slate-800/80 p-2 rounded-xl flex items-center justify-between"
+                  >
+                    <div>
+                      <p className="text-xs font-semibold text-slate-200">
+                        {item.servico} — <span className="text-slate-400 font-normal">{item.nome}</span>
+                      </p>
+                      <p className="text-[10px] text-slate-500">
+                        {item.data}
+                      </p>
+                    </div>
+                    <p className="text-xs text-emerald-400 font-bold font-mono">
+                      R$ {Number(item.valor || 0).toFixed(2).replace(".",",")}
                     </p>
-                    {item.obs && (
-                      <p className="text-[10px] text-slate-500 italic">"{item.obs}"</p>
-                    )}
                   </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        <button
+            onClick={() => setShowDeletePeriodModal(true)}
+            className="bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
+          >
+            <Trash size={14} />
+            Apagar por Período
+          </button>
+      </div>
 
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => editar(item)}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition cursor-pointer"
-                      title="Editar"
-                    >
-                      <Pencil size={15} />
-                    </button>
+      {/* Modal de Criação / Edição de Serviço */}
+      {showFormModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-5 md:p-6 space-y-4 relative shadow-2xl">
+            <button
+              onClick={fecharModalForm}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition cursor-pointer"
+            >
+              <X size={18} />
+            </button>
 
-                    <button
-                      onClick={() => excluir(item.id)}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
-                      title="Excluir"
-                    >
-                      <Trash size={15} />
-                    </button>
-                  </div>
+            <div className="flex items-center gap-2 mb-2">
+              <PlusCircle size={18} className="text-emerald-400" />
+              <h2 className="text-sm font-semibold text-slate-200">
+                {editandoId ? "Editar Atendimento" : "Novo Atendimento"}
+              </h2>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-3.5">
+              <div>
+                <label className="text-xs font-medium text-slate-400 mb-1.5 block">Serviço Prestado</label>
+                <select
+                  value={servico}
+                  onChange={e => setServico(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 p-2.5 rounded-xl text-xs text-slate-200 outline-none transition"
+                >
+                  <option value="" disabled>Selecione o serviço</option>
+                  <option>Banho</option>
+                  <option>Banho + Tosa Higiênica</option>
+                  <option>Banho + Tosa Completa</option>
+                  <option>Outro</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-slate-400 mb-1.5 block">Nome do Pet ou Cliente</label>
+                <input
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 p-2.5 rounded-xl text-xs text-slate-200 placeholder-slate-500 outline-none transition"
+                  placeholder="Ex: Rex / Maria Silva"
+                  value={nome}
+                  onChange={e => setNome(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-slate-400 mb-1.5 block">Valor Cobrado</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs font-bold">R$</span>
+                  <input
+                    type="number"
+                    className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 pl-8 pr-3 py-2.5 rounded-xl text-xs text-slate-200 placeholder-slate-500 outline-none transition font-mono"
+                    placeholder="0,00"
+                    value={valor}
+                    onChange={e => setValor(e.target.value)}
+                  />
                 </div>
-              ))}
+              </div>
 
-              {servicosFiltrados.length === 0 && (
-                <div className="text-center py-6">
-                  <p className="text-xs text-slate-500">Nenhum serviço encontrado neste mês.</p>
-                </div>
-              )}
+              <div>
+                <label className="text-xs font-medium text-slate-400 mb-1.5 block">Data do Atendimento</label>
+                <input
+                  type="date"
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 p-2.5 rounded-xl text-xs text-slate-200 outline-none transition"
+                  value={data}
+                  onChange={e => setData(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-slate-400 mb-1.5 block">Observações (opcional)</label>
+              <textarea
+                rows="2"
+                className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 p-2.5 rounded-xl text-xs text-slate-200 placeholder-slate-500 outline-none transition resize-none"
+                placeholder="Anotações adicionais sobre o pet ou cliente..."
+                value={obs}
+                onChange={e => setObs(e.target.value)}
+              />
+            </div>
+
+            <div className="flex gap-2.5 pt-1">
+              <button
+                onClick={fecharModalForm}
+                className="w-1/3 bg-slate-950 hover:bg-slate-800 border border-slate-800 font-medium text-slate-300 py-2.5 rounded-xl transition text-xs cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={salvar}
+                className="w-2/3 bg-emerald-600 hover:bg-emerald-500 font-medium text-white py-2.5 rounded-xl transition shadow-lg shadow-emerald-950/20 text-xs active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <CheckCircle2 size={16} />
+                {editandoId ? "Atualizar Serviço" : "Salvar Serviço"}
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      <div className="bg-slate-900/80 border border-slate-800/80 p-5 rounded-2xl space-y-4">
-        <div className="flex items-center gap-2">
-          <Filter size={16} className="text-indigo-400" />
-          <h2 className="text-sm font-semibold text-slate-200">Consultar por Período Customizado</h2>
-        </div>
+      {/* Modal de Apagar por Período */}
+      {showDeletePeriodModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-5 space-y-4 relative shadow-2xl">
+            <button
+              onClick={() => setShowDeletePeriodModal(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition cursor-pointer"
+            >
+              <X size={18} />
+            </button>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-[11px] font-medium text-slate-400 mb-1 block">Início</label>
-            <input 
-              type="date" 
-              value={inicio} 
-              onChange={e => setInicio(e.target.value)} 
-              className="w-full bg-slate-950 border border-slate-800 p-2 rounded-xl text-xs text-slate-200 outline-none focus:border-indigo-500/50 transition" 
-            />
-          </div>
-          <div>
-            <label className="text-[11px] font-medium text-slate-400 mb-1 block">Fim</label>
-            <input 
-              type="date" 
-              value={fim} 
-              onChange={e => setFim(e.target.value)} 
-              className="w-full bg-slate-950 border border-slate-800 p-2 rounded-xl text-xs text-slate-200 outline-none focus:border-indigo-500/50 transition" 
-            />
-          </div>
-        </div>
-
-        <button
-          onClick={calcularPeriodo}
-          className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2 rounded-xl text-xs transition shadow-lg shadow-indigo-950/20 active:scale-[0.99] cursor-pointer"
-        >
-          Calcular Período
-        </button>
-
-        {servicosPeriodo.length > 0 && (
-          <div className="space-y-4 pt-2">
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5">
-              <Card titulo="Bruto" valor={brutoPeriodo} cor="text-emerald-400" bg="bg-emerald-500/10 border-emerald-500/20" />
-              <Card titulo="Líquido" valor={liquidoPeriodo} cor="text-sky-400" bg="bg-sky-500/10 border-sky-500/20" />
-              <Card titulo="Gastos" valor={gastosPeriodo} cor="text-rose-400" bg="bg-rose-500/10 border-rose-500/20" />
-              <Card titulo="Adiantamentos" valor={adiantamentosPeriodo} cor="text-amber-400" bg="bg-amber-500/10 border-amber-500/20" />
-              <Card titulo="A Receber" valor={receberPeriodo} cor="text-purple-400" bg="bg-purple-500/10 border-purple-500/20" />
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-400">
+                <AlertTriangle size={18} />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-100">Apagar por Período</h3>
+                <p className="text-[11px] text-slate-400">Exclua serviços dentro de um intervalo de datas</p>
+              </div>
             </div>
 
-            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800">
-              <span className="text-xs text-slate-400 font-medium">Subtotal Calculado</span>
-              <span className="text-sm font-bold text-emerald-400 font-mono">
-                R$ {subtotalPeriodo.toFixed(2).replace(".",",")}
-              </span>
-            </div>
+            <div className="space-y-3 pt-1">
+              <div>
+                <label className="text-[11px] font-medium text-slate-400 mb-1 block">Data Inicial</label>
+                <input
+                  type="date"
+                  value={deleteInicio}
+                  onChange={(e) => setDeleteInicio(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 p-2 rounded-xl text-xs text-slate-200 outline-none focus:border-rose-500/50"
+                />
+              </div>
 
-            <div className="space-y-2">
-              {servicosPeriodoFiltrados.map(item => (
-                <div
-                  key={item.id}
-                  className="bg-slate-950 border border-slate-800/80 p-3 rounded-xl flex items-center justify-between"
+              <div>
+                <label className="text-[11px] font-medium text-slate-400 mb-1 block">Data Final</label>
+                <input
+                  type="date"
+                  value={deleteFim}
+                  onChange={(e) => setDeleteFim(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 p-2 rounded-xl text-xs text-slate-200 outline-none focus:border-rose-500/50"
+                />
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-center">
+                <p className="text-xs text-rose-300 font-medium">
+                  {qtdServicosParaExcluir === 0
+                    ? "Nenhum serviço encontrado neste período."
+                    : `${qtdServicosParaExcluir} serviço(s) encontrado(s) para exclusão.`}
+                </p>
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => setShowDeletePeriodModal(false)}
+                  disabled={excluindoPeriodo}
+                  className="w-1/2 bg-slate-950 border border-slate-800 hover:bg-slate-800 text-slate-300 text-xs py-2 rounded-xl font-medium transition cursor-pointer disabled:opacity-50"
                 >
-                  <div>
-                    <p className="text-xs font-semibold text-slate-200">
-                      {item.servico} — <span className="text-slate-400 font-normal">{item.nome}</span>
-                    </p>
-                    <p className="text-[10px] text-slate-500 mt-0.5">
-                      {item.data}
-                    </p>
-                  </div>
-                  <p className="text-xs text-emerald-400 font-bold font-mono">
-                    R$ {Number(item.valor || 0).toFixed(2).replace(".",",")}
-                  </p>
-                </div>
-              ))}
+                  Cancelar
+                </button>
+                <button
+                  onClick={apagarPorPeriodo}
+                  disabled={excluindoPeriodo || qtdServicosParaExcluir === 0}
+                  className="w-1/2 bg-rose-600 hover:bg-rose-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs py-2 rounded-xl font-medium transition flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Trash size={13} />
+                  {excluindoPeriodo ? "Apagando..." : "Apagar Tudo"}
+                </button>
+              </div>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
+      {/* Modal de Compartilhamento */}
       {showShareModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-start justify-center p-4 z-50">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-5 space-y-4 relative shadow-2xl mt-12">
@@ -743,9 +921,9 @@ export default function Servicos() {
 
 function Card({ titulo, valor, cor, bg }) {
   return (
-    <div className={`border p-3 rounded-xl text-center flex flex-col justify-between ${bg}`}>
-      <p className="text-slate-400 text-[11px] font-medium mb-1">{titulo}</p>
-      <h2 className={`text-sm font-extrabold font-mono ${cor}`}>
+    <div className={`border p-2.5 rounded-xl text-center flex flex-col justify-between ${bg}`}>
+      <p className="text-slate-400 text-[10px] font-medium mb-0.5">{titulo}</p>
+      <h2 className={`text-xs sm:text-sm font-extrabold font-mono ${cor}`}>
         R$ {Number(valor || 0).toFixed(2).replace(".",",")}
       </h2>
     </div>
